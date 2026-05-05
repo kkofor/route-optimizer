@@ -41,13 +41,14 @@ input:checked+.knob:before{transform:translateX(18px);background:#000;}
 .p-type.pickup{background:#0d2e1a;color:var(--green);}
 .p-type.deliver{background:#2e1a0d;color:var(--orange);}
 .p-type.deliver_only{background:#0d1a2e;color:var(--blue);}
-.p-type.home{background:#2e2e0d;color:#ffee44;}
 .p-job{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);flex-shrink:0;margin-top:2px;width:60px;}
-.p-addr{font-size:12px;flex:1;line-height:1.4;}
+.p-addr{font-size:12px;line-height:1.4;}
 .stats{display:flex;gap:8px;margin-bottom:10px;}
 .stat{flex:1;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;text-align:center;}
 .stat-v{font-family:'JetBrains Mono',monospace;font-size:17px;color:var(--green);font-weight:700;}
 .stat-l{font-size:9px;color:var(--muted);margin-top:2px;}
+.sim-bar{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:center;padding:4px;margin-bottom:8px;}
+.sim-bar span{color:var(--green);}
 .r-item{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--b);align-items:flex-start;}
 .r-item:last-child{border-bottom:none;}
 .r-num{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--green);color:#000;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
@@ -62,11 +63,10 @@ input:checked+.knob:before{transform:translateX(18px);background:#000;}
 .maps-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:3px;}
 .maps-a{display:block;background:var(--s2);border:1px solid var(--b);border-radius:4px;color:var(--text);padding:10px 12px;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:11px;transition:border-color .2s;}
 .maps-a:hover{border-color:var(--green);color:var(--green);}
-.warn-box{background:#2e0d0d;border:1px solid var(--red);border-radius:4px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--red);}
 </style>
 </head>
 <body>
-<h1>&#9658;&#9658; Route Optimizer v3</h1>
+<h1>&#9658;&#9658; Route Optimizer v3.2</h1>
 <div class="card">
   <div class="card-title">① 粘贴 Claude 输出</div>
   <textarea id="paste-in" placeholder="PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
@@ -80,7 +80,7 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
 <div class="card">
   <div class="card-title">② 设置</div>
   <div class="row">
-    <label>ORS 自动优化顺序</label>
+    <label>ORS 自动优化（多次模拟取最优）</label>
     <label class="toggle"><input type="checkbox" id="do-opt" checked><span class="knob"></span></label>
   </div>
   <div class="row" style="margin-bottom:10px">
@@ -95,8 +95,9 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
 <div id="results" style="display:none">
   <div class="card">
     <div class="card-title">路线统计</div>
+    <div class="sim-bar" id="sim-info"></div>
     <div class="stats">
-      <div class="stat"><div class="stat-v" id="s-dist">—</div><div class="stat-l">km</div></div>
+      <div class="stat"><div class="stat-v" id="s-dist">—</div><div class="stat-l">km 驾驶</div></div>
       <div class="stat"><div class="stat-v" id="s-time">—</div><div class="stat-l">分钟</div></div>
       <div class="stat"><div class="stat-v" id="s-stops">—</div><div class="stat-l">站点</div></div>
     </div>
@@ -106,14 +107,20 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
 </div>
 <script>
 const ORS='eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
+const SIM_RUNS=5; // number of simulation runs
 let parsed=[];
+
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
 
 function doParse(){
   const raw=document.getElementById('paste-in').value.trim();
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   parsed=[];
   const pickupJobs=new Set();
-  const deliverJobs=new Set();
   for(const line of lines){
     const parts=line.split('|');
     if(parts.length<2)continue;
@@ -126,10 +133,9 @@ function doParse(){
       if(!addr)continue;
       parsed.push({type,job,addr,include:true});
       if(type==='PICKUP')pickupJobs.add(job);
-      if(type==='DELIVER')deliverJobs.add(job);
     }
   }
-  // Auto-fix: DELIVER with no matching PICKUP -> DELIVER_ONLY
+  // DELIVER with no matching PICKUP -> DELIVER_ONLY (already in vehicle)
   parsed.forEach(p=>{
     if(p.type==='DELIVER'&&!pickupJobs.has(p.job))p.type='DELIVER_ONLY';
   });
@@ -167,6 +173,61 @@ async function geocode(addr){
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function setStatus(msg,cls=''){const e=document.getElementById('status');e.textContent=msg;e.className='status '+cls;}
 
+// Build ORS body with capacity constraints + shuffled order for variety
+function buildOrsBody(originC, homeC, shipments, jobs, shuffled){
+  // Capacity = total number of shipments (each takes 1 unit)
+  // This ensures ORS models load: pickup adds 1, delivery removes 1
+  // Vehicle capacity = max items we can carry at once = total shipments
+  // (conservative: allows carrying all at once, ORS will optimize)
+  const capacity=shipments.length+jobs.length||1;
+  const vehicle={
+    id:1,
+    profile:'driving-car',
+    start:originC,
+    capacity:[capacity]
+  };
+  if(homeC)vehicle.end=homeC;
+
+  const orderedShipments=shuffled?shuffle(shipments):shipments;
+  const orderedJobs=shuffled?shuffle(jobs):jobs;
+
+  const body={vehicles:[vehicle]};
+
+  if(orderedShipments.length){
+    body.shipments=orderedShipments.map(s=>({
+      id:s.id,
+      pickup:{
+        id:s.pid,
+        location:s.pickupCoord,
+        amount:[1]  // load +1 when picked up
+      },
+      delivery:{
+        id:s.did,
+        location:s.deliverCoord,
+        amount:[1]  // unload -1 when delivered
+      }
+    }));
+  }
+  if(orderedJobs.length){
+    body.jobs=orderedJobs.map(j=>({
+      id:j.id,
+      location:j.coord,
+      amount:[0]  // deliver_only: already in vehicle, no capacity change
+    }));
+  }
+  return body;
+}
+
+async function callORS(body){
+  const r=await fetch('https://api.openrouteservice.org/optimization',{
+    method:'POST',
+    headers:{'Authorization':ORS,'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok){const t=await r.text();throw new Error('ORS: '+t.slice(0,150));}
+  return r.json();
+}
+
 async function doRun(){
   if(!parsed.length)doParse();
   const active=parsed.filter(p=>p.include&&p.type!=='HOME');
@@ -181,7 +242,7 @@ async function doRun(){
   document.getElementById('results').style.display='none';
 
   try{
-    // Geocode all
+    // Geocode all addresses
     const allAddrs=[originStr,...active.map(p=>p.addr),...(fixHome?[homeStr]:[])];
     const coords=[];
     for(let i=0;i<allAddrs.length;i++){
@@ -192,22 +253,12 @@ async function doRun(){
     const originC=coords[0];
     const homeC=fixHome?coords[coords.length-1]:null;
     const stopCoords=fixHome?coords.slice(1,-1):coords.slice(1);
-
-    // Attach coords to active items
     active.forEach((p,i)=>p._coord=stopCoords[i]);
 
     let orderedItems;
 
     if(doOpt&&active.length>1){
-      setStatus('ORS 优化（取送配对约束）…','loading');
-
-      // Build shipments: each paired PICKUP+DELIVER is one shipment
-      // Constraint: pickup must happen before its own delivery ONLY
-      // ORS is free to interleave different shipments as it likes
-      const shipments=[];
-      const jobs=[];
-
-      // Group PICKUP and DELIVER by job number
+      // Group by job
       const byJob={};
       active.forEach(p=>{
         if(p.type==='PICKUP'||p.type==='DELIVER'){
@@ -216,82 +267,77 @@ async function doRun(){
         }
       });
 
-      // Each paired job -> one shipment with unique IDs
-      // Use simple sequential IDs: pickup_id = i*2+1, delivery_id = i*2+2
-      let shipIdx=0;
+      // Build shipments list
+      const shipments=[];
+      let sIdx=0;
       Object.entries(byJob).forEach(([job,pair])=>{
         if(pair.PICKUP&&pair.DELIVER){
-          const pid=shipIdx*2+1;
-          const did=shipIdx*2+2;
+          const pid=sIdx*2+1;
+          const did=sIdx*2+2;
           shipments.push({
-            id:shipIdx+1,
-            pickup:{id:pid,location:pair.PICKUP._coord},
-            delivery:{id:did,location:pair.DELIVER._coord},
-            _pickupItem:pair.PICKUP,
-            _deliverItem:pair.DELIVER,
-            _pid:pid,
-            _did:did
+            id:sIdx+1,
+            pid,did,
+            pickupCoord:pair.PICKUP._coord,
+            deliverCoord:pair.DELIVER._coord,
+            pickupItem:pair.PICKUP,
+            deliverItem:pair.DELIVER
           });
-          shipIdx++;
+          sIdx++;
         }
       });
 
-      // DELIVER_ONLY and unpaired DELIVER -> jobs
-      let jobIdx=1000;
+      // Build jobs list (DELIVER_ONLY)
+      const jobs=[];
+      let jIdx=1000;
       active.forEach(p=>{
         if(p.type==='DELIVER_ONLY'){
-          jobs.push({id:jobIdx,location:p._coord,_item:p});
-          jobIdx++;
+          jobs.push({id:jIdx++,coord:p._coord,item:p});
         }
       });
 
-      // Build ORS request body
-      const vehicle={id:1,profile:'driving-car',start:originC};
-      if(homeC)vehicle.end=homeC;
-
-      const orsBody={vehicles:[vehicle]};
-      if(shipments.length){
-        orsBody.shipments=shipments.map(s=>({
-          id:s.id,
-          pickup:{id:s._pid,location:s.pickup.location},
-          delivery:{id:s._did,location:s.delivery.location}
-        }));
-      }
-      if(jobs.length){
-        orsBody.jobs=jobs.map(j=>({id:j.id,location:j.location}));
-      }
-
-      const res=await fetch('https://api.openrouteservice.org/optimization',{
-        method:'POST',
-        headers:{'Authorization':ORS,'Content-Type':'application/json'},
-        body:JSON.stringify(orsBody)
-      });
-      if(!res.ok){const t=await res.text();throw new Error('ORS: '+t.slice(0,150));}
-      const data=await res.json();
-
-      // Build lookup: step id -> item
+      // Build id->item lookup
       const idToItem={};
-      shipments.forEach(s=>{
-        idToItem[s._pid]=s._pickupItem;
-        idToItem[s._did]=s._deliverItem;
-      });
-      jobs.forEach(j=>idToItem[j.id]=j._item);
+      shipments.forEach(s=>{idToItem[s.pid]=s.pickupItem;idToItem[s.did]=s.deliverItem;});
+      jobs.forEach(j=>idToItem[j.id]=j.item);
 
-      const steps=data.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
-      orderedItems=steps.map(st=>idToItem[st.id]).filter(Boolean);
+      // Run multiple simulations, keep best (shortest ORS distance)
+      let bestItems=null;
+      let bestDist=Infinity;
+      const runs=Math.min(SIM_RUNS,active.length>3?SIM_RUNS:2);
+
+      for(let run=0;run<runs;run++){
+        setStatus(`模拟路线 ${run+1}/${runs}…`,'loading');
+        const body=buildOrsBody(originC,homeC,shipments,jobs,run>0);
+        await sleep(400); // rate limit
+        try{
+          const data=await callORS(body);
+          const route=data.routes[0];
+          const routeDist=route.cost||route.distance||Infinity;
+          const steps=route.steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
+          const items=steps.map(st=>idToItem[st.id]).filter(Boolean);
+          if(routeDist<bestDist){bestDist=routeDist;bestItems=items;}
+        }catch(e){console.warn('Run '+run+' failed:',e.message);}
+      }
+
+      if(!bestItems||!bestItems.length)throw new Error('所有模拟均失败，请检查地址');
+      orderedItems=bestItems;
+
+      document.getElementById('sim-info').innerHTML=`已完成 <span>${runs}</span> 次模拟，采用最短路线`;
 
     } else {
       orderedItems=active;
+      document.getElementById('sim-info').innerHTML='';
     }
 
-    // Driving stats
+    // Get actual driving distance/time for best route
     setStatus('计算驾驶距离…','loading');
     const routeCoords=[originC,...orderedItems.map(p=>p._coord),...(homeC?[homeC]:[])];
     let dist='—',time='—';
     try{
       const dr=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{
-        method:'POST',headers:{'Authorization':ORS,'Content-Type':'application/json'},
-        body:JSON.stringify({coordinates:routeCoords})
+        method:'POST',
+        headers:{'Authorization':ORS,'Content-Type':'application/json'},
+        body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})
       });
       if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
     }catch(e){}
