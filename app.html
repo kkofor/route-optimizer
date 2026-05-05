@@ -370,29 +370,47 @@ async function doScan(){
 
 function renderParsedOrders(){
   const el = document.getElementById('parsed-list');
+  const rec = getTodayRecord();
   el.innerHTML = pendingOrders.map((p,i)=>{
     const tc = p.type==='PICKUP'?'badge-pickup':p.type==='DELIVER'?'badge-deliver':'badge-deliver-only';
     const label = p.type==='PICKUP'?'取件':p.type==='DELIVER'?'送件':'送件(车上)';
-    return `<div class="order-item">
+    const isExisting = !!rec.jobs[p.job];
+    const existingJob = rec.jobs[p.job];
+    // Check if this specific action is already done
+    const isDone = isExisting && (
+      (p.type==='PICKUP' && existingJob.pickup==='done') ||
+      ((p.type==='DELIVER'||p.type==='DELIVER_ONLY') && existingJob.deliver==='done')
+    );
+    const newTag = !isExisting ? '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:#000;background:var(--green);padding:1px 5px;border-radius:2px;margin-left:4px">NEW</span>' : '';
+    const doneTag = isDone ? '<span style="font-family:JetBrains Mono,monospace;font-size:9px;color:var(--muted);padding:1px 5px;border-radius:2px;margin-left:4px;background:var(--b2)">已完成</span>' : '';
+    return `<div class="order-item" style="${isDone?'opacity:0.4':''}">
       <span class="o-badge ${tc}">${label}</span>
       <span class="o-job">#${p.job}</span>
-      <div class="o-addr">${p.addr}</div>
+      <div class="o-addr">${p.addr}${newTag}${doneTag}</div>
     </div>`;
   }).join('');
 }
 
 function applyAndRoute(){
-  // Merge pending into DB
   const rec = getTodayRecord();
   pendingOrders.forEach(p=>{
-    if(!rec.jobs[p.job]) rec.jobs[p.job]={pickup:'pending',deliver:'pending',addr_pickup:'',addr_deliver:''};
-    // Only update addr if not already set (prevent re-scan overwrite)
-    if(p.type==='PICKUP' && !rec.jobs[p.job].addr_pickup)
-      rec.jobs[p.job].addr_pickup = p.addr;
-    if((p.type==='DELIVER'||p.type==='DELIVER_ONLY') && !rec.jobs[p.job].addr_deliver)
-      rec.jobs[p.job].addr_deliver = p.addr;
-    if(p.type==='DELIVER_ONLY' && rec.jobs[p.job].pickup!=='done')
-      rec.jobs[p.job].pickup = 'done'; // already in vehicle
+    const existing = rec.jobs[p.job];
+    if(!existing){
+      // Brand new job - init fresh
+      rec.jobs[p.job]={pickup:'pending',deliver:'pending',addr_pickup:'',addr_deliver:''};
+    }
+    // Always update address if empty (fill in missing info)
+    // But NEVER touch status fields of existing jobs - preserve done/pending state
+    if(p.type==='PICKUP'){
+      if(!rec.jobs[p.job].addr_pickup) rec.jobs[p.job].addr_pickup=p.addr;
+    }
+    if(p.type==='DELIVER'||p.type==='DELIVER_ONLY'){
+      if(!rec.jobs[p.job].addr_deliver) rec.jobs[p.job].addr_deliver=p.addr;
+    }
+    // Only mark pickup done if this is a new job (existing jobs keep their status)
+    if(p.type==='DELIVER_ONLY' && !existing){
+      rec.jobs[p.job].pickup='done';
+    }
   });
   saveDB();
 
