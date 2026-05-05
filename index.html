@@ -125,7 +125,11 @@ function doParse(){
     const parts=line.split('|');
     if(parts.length<2)continue;
     const type=parts[0].trim().toUpperCase();
-    if(type==='HOME'){
+    if(type==='ORIGIN'){
+      // Auto-fill origin input field
+      const addr=parts.slice(1).join('|').trim();
+      if(addr)document.getElementById('origin').value=addr;
+    } else if(type==='HOME'){
       parsed.push({type:'HOME',job:null,addr:parts.slice(1).join('|').trim(),include:true});
     } else if(['PICKUP','DELIVER','DELIVER_ONLY'].includes(type)&&parts.length>=3){
       const job=parts[1].trim();
