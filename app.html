@@ -125,11 +125,11 @@ input[type=text]:focus{border-color:var(--green);}
   <div class="card">
     <div class="card-title">上传截图 — AI 自动解析</div>
     <div class="upload-zone" id="upload-zone">
-      <input type="file" accept="image/*" id="img-input" onchange="onImageSelected(event)">
+      <input type="file" accept="image/*" id="img-input" multiple onchange="onImageSelected(event)">
       <div class="upload-icon">&#128247;</div>
-      <div class="upload-label">点击选择截图 或 <span>拖拽到这里</span></div>
+      <div class="upload-label">点击选择截图（可多选）或 <span>拖拽到这里</span></div>
     </div>
-    <img id="preview" class="preview-img" style="display:none">
+    <div id="preview-grid" style="display:none;display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
   </div>
 
   <div class="card">
@@ -223,8 +223,7 @@ const STORAGE_KEY = 'dispatch_db';
 
 // ── State ─────────────────────────────────────────────────────────
 let db = loadDB();
-let currentImage = null; // base64
-let currentMediaType = 'image/jpeg';
+let currentImages = []; // array of {data, mediaType}
 let pendingOrders = []; // parsed from scan, awaiting confirmation
 let routeOrderedItems = [];
 
@@ -256,20 +255,33 @@ function showPage(name,el){
 
 // ── Image upload ──────────────────────────────────────────────────
 function onImageSelected(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const header = ev.target.result.split(',')[0];
-    currentMediaType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-    currentImage = ev.target.result.split(',')[1]; // base64
-    const preview = document.getElementById('preview');
-    preview.src = ev.target.result;
-    preview.style.display = 'block';
-    document.getElementById('btn-scan').disabled = false;
-    setStatus('scan', '截图已加载，点击解析', 'idle');
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(e.target.files);
+  if(!files.length) return;
+  currentImages = [];
+  const grid = document.getElementById('preview-grid');
+  grid.innerHTML = '';
+  grid.style.display = 'flex';
+  let loaded = 0;
+  files.forEach((file, i) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const header = ev.target.result.split(',')[0];
+      const mediaType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+      const data = ev.target.result.split(',')[1];
+      currentImages[i] = {data, mediaType};
+      // Preview thumbnail
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      img.style.cssText = 'height:80px;border-radius:4px;border:1px solid var(--b);object-fit:cover;flex:1;min-width:60px;max-width:120px;';
+      grid.appendChild(img);
+      loaded++;
+      if(loaded === files.length){
+        document.getElementById('btn-scan').disabled = false;
+        setStatus('scan', `${files.length} 张截图已加载，点击解析`, 'idle');
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // Drag and drop
@@ -278,13 +290,15 @@ zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('d
 zone.addEventListener('dragleave', ()=>zone.classList.remove('drag'));
 zone.addEventListener('drop', e=>{
   e.preventDefault(); zone.classList.remove('drag');
-  const file = e.dataTransfer.files[0];
-  if(file){ document.getElementById('img-input').files = e.dataTransfer.files; onImageSelected({target:{files:[file]}}); }
+  if(e.dataTransfer.files.length){
+    document.getElementById('img-input').files = e.dataTransfer.files;
+    onImageSelected({target:{files:e.dataTransfer.files}});
+  }
 });
 
 // ── AI Scan ───────────────────────────────────────────────────────
 async function doScan(){
-  if(!currentImage){ setStatus('scan','请先上传截图','error'); return; }
+  if(!currentImages.length){ setStatus('scan','请先上传截图','error'); return; }
   document.getElementById('btn-scan').disabled = true;
   setStatus('scan', 'AI 解析中…', 'loading');
   document.getElementById('scan-result').style.display = 'none';
@@ -308,6 +322,13 @@ async function doScan(){
 只输出数据行，不要解释。`;
 
   try{
+    // Build content array: all images + prompt text
+    const msgContent = currentImages.map(img => ({
+      type: 'image',
+      source: { type: 'base64', media_type: img.mediaType, data: img.data }
+    }));
+    msgContent.push({ type: 'text', text: prompt });
+
     const res = await fetch(`${AI_BASE}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -317,14 +338,8 @@ async function doScan(){
       },
       body: JSON.stringify({
         model: AI_MODEL,
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: currentMediaType, data: currentImage }},
-            { type: 'text', text: prompt }
-          ]
-        }]
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: msgContent }]
       })
     });
 
