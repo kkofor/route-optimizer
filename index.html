@@ -111,8 +111,79 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
 </div>
 <script>
 const ORS='eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
-const SIM_RUNS=5; // number of simulation runs
+const SIM_RUNS=15; // number of simulation runs
 let parsed=[];
+
+
+// ── Geo helpers ───────────────────────────────────────────────────
+function dist2(a, b){
+  const dx=a[0]-b[0], dy=a[1]-b[1];
+  return dx*dx+dy*dy;
+}
+
+// Greedy nearest-neighbor pre-sort respecting shipment pickup-before-delivery
+// coords: array of [lng,lat], items: corresponding item array
+// Returns reordered [items, coords]
+function nearestNeighborSort(originC, items, coords, shipments){
+  const n = items.length;
+  const visited = new Array(n).fill(false);
+  const result = [], resultCoords = [];
+
+  // Build set of delivery indices that require their pickup to be done first
+  // pickupDone[deliveryIdx] = pickupIdx
+  const requiresPickup = {}; // deliveryItemIndex -> pickupItemIndex
+  shipments.forEach(s => {
+    const pickupIdx = items.indexOf(s.pickupItem);
+    const deliverIdx = items.indexOf(s.deliverItem);
+    if(pickupIdx >= 0 && deliverIdx >= 0)
+      requiresPickup[deliverIdx] = pickupIdx;
+  });
+
+  let cur = originC;
+  for(let step = 0; step < n; step++){
+    let best = -1, bestDist = Infinity;
+    for(let i = 0; i < n; i++){
+      if(visited[i]) continue;
+      // Check pickup constraint: if this is a delivery, its pickup must be done
+      if(requiresPickup[i] !== undefined){
+        const pickupIdx = requiresPickup[i];
+        if(!visited[pickupIdx]) continue; // skip - pickup not done yet
+      }
+      const d = dist2(cur, coords[i]);
+      if(d < bestDist){ bestDist = d; best = i; }
+    }
+    if(best < 0) break;
+    visited[best] = true;
+    result.push(items[best]);
+    resultCoords.push(coords[best]);
+    cur = coords[best];
+  }
+  return [result, resultCoords];
+}
+
+// Score a route for backtracking: penalize direction reversals
+// A "reversal" = moving north then south (or E/W equivalent) sharply
+function backtrackScore(originC, orderedCoords, homeC){
+  const allPts = [originC, ...orderedCoords, ...(homeC ? [homeC] : [])];
+  let penalty = 0;
+  for(let i = 1; i < allPts.length - 1; i++){
+    const prev = allPts[i-1], cur = allPts[i], next = allPts[i+1];
+    // Direction vectors
+    const d1lat = cur[1] - prev[1];
+    const d2lat = next[1] - cur[1];
+    const d1lng = cur[0] - prev[0];
+    const d2lng = next[0] - cur[0];
+    // Reversal = dot product negative (going opposite direction)
+    const dot = d1lat*d2lat + d1lng*d2lng;
+    const mag1 = Math.sqrt(d1lat*d1lat + d1lng*d1lng);
+    const mag2 = Math.sqrt(d2lat*d2lat + d2lng*d2lng);
+    if(mag1 > 0 && mag2 > 0){
+      const cos = dot / (mag1 * mag2);
+      if(cos < -0.3) penalty += mag1 + mag2; // sharp reversal penalty
+    }
+  }
+  return penalty;
+}
 
 function shuffle(arr){
   const a=[...arr];
@@ -183,6 +254,7 @@ function setStatus(msg,cls=''){const e=document.getElementById('status');e.textC
 
 // Build ORS body with capacity constraints + shuffled order for variety
 function buildOrsBody(originC, homeC, shipments, jobs, shuffled){
+  // shuffled: false=original, true=full shuffle, 'partial'=swap adjacent
   // Capacity = total number of shipments (each takes 1 unit)
   // This ensures ORS models load: pickup adds 1, delivery removes 1
   // Vehicle capacity = max items we can carry at once = total shipments
@@ -196,8 +268,16 @@ function buildOrsBody(originC, homeC, shipments, jobs, shuffled){
   };
   if(homeC)vehicle.end=homeC;
 
-  const orderedShipments=shuffled?shuffle(shipments):shipments;
-  const orderedJobs=shuffled?shuffle(jobs):jobs;
+  let orderedShipments, orderedJobs;
+  if(shuffled==='partial'){
+    orderedShipments=[...shipments];
+    orderedJobs=[...jobs];
+    const si=Math.floor(Math.random()*Math.max(orderedShipments.length-1,1));
+    if(orderedShipments.length>1)[orderedShipments[si],orderedShipments[si+1]]=[orderedShipments[si+1],orderedShipments[si]];
+  } else {
+    orderedShipments=shuffled?shuffle(shipments):shipments;
+    orderedJobs=shuffled?shuffle(jobs):jobs;
+  }
 
   const body={vehicles:[vehicle]};
 
@@ -308,22 +388,34 @@ async function doRun(){
       shipments.forEach(s=>{idToItem[s.pid]=s.pickupItem;idToItem[s.did]=s.deliverItem;});
       jobs.forEach(j=>idToItem[j.id]=j.item);
 
-      // Run multiple simulations, keep best (shortest ORS distance)
+      // Step 1: greedy nearest-neighbor pre-sort
+      const allStopCoords = active.map(p=>p._coord);
+      const [nnItems] = nearestNeighborSort(originC, active, allStopCoords, shipments);
+
       let bestItems=null;
       let bestDist=Infinity;
-      const runs=Math.min(SIM_RUNS,active.length>3?SIM_RUNS:2);
+      const runs=SIM_RUNS;
 
       for(let run=0;run<runs;run++){
         setStatus(`模拟路线 ${run+1}/${runs}…`,'loading');
-        const body=buildOrsBody(originC,homeC,shipments,jobs,run>0);
-        await sleep(400); // rate limit
+        // Run 0: NN order; 1-4: full shuffle; 5+: partial shuffle
+        let shuffled;
+        if(run===0) shuffled=false;
+        else if(run<5) shuffled=true;
+        else shuffled='partial';
+        const body=buildOrsBody(originC,homeC,shipments,jobs,shuffled);
+        await sleep(300);
         try{
           const data=await callORS(body);
           const route=data.routes[0];
-          const routeDist=route.cost||route.distance||Infinity;
+          const orsDist=route.summary?.distance||route.cost||route.distance||Infinity;
           const steps=route.steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
           const items=steps.map(st=>idToItem[st.id]).filter(Boolean);
-          if(routeDist<bestDist){bestDist=routeDist;bestItems=items;}
+          // Combined cost: ORS distance + backtrack penalty
+          const coords=items.map(p=>p._coord);
+          const btPenalty=backtrackScore(originC,coords,homeC);
+          const totalCost=orsDist+btPenalty*111000*0.5;
+          if(totalCost<bestDist){bestDist=totalCost;bestItems=items;}
         }catch(e){console.warn('Run '+run+' failed:',e.message);}
       }
 

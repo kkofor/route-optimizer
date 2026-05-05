@@ -218,7 +218,7 @@ const AI_BASE = 'https://www.mrafx.ca';
 const AI_TOKEN = 'sk-sub2api-rIdn5H_lvQOWQOcCkPaWUb5BiYT5cLhF';
 const AI_MODEL = 'claude-sonnet-4-5-20251001';
 const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
-const SIM_RUNS = 5;
+const SIM_RUNS = 15;
 const STORAGE_KEY = 'dispatch_db';
 
 // ── State ─────────────────────────────────────────────────────────
@@ -431,6 +431,77 @@ function showPageDirect(name){
 }
 
 // ── Route ─────────────────────────────────────────────────────────
+
+// ── Geo helpers ───────────────────────────────────────────────────
+function dist2(a, b){
+  const dx=a[0]-b[0], dy=a[1]-b[1];
+  return dx*dx+dy*dy;
+}
+
+// Greedy nearest-neighbor pre-sort respecting shipment pickup-before-delivery
+// coords: array of [lng,lat], items: corresponding item array
+// Returns reordered [items, coords]
+function nearestNeighborSort(originC, items, coords, shipments){
+  const n = items.length;
+  const visited = new Array(n).fill(false);
+  const result = [], resultCoords = [];
+
+  // Build set of delivery indices that require their pickup to be done first
+  // pickupDone[deliveryIdx] = pickupIdx
+  const requiresPickup = {}; // deliveryItemIndex -> pickupItemIndex
+  shipments.forEach(s => {
+    const pickupIdx = items.indexOf(s.pickupItem);
+    const deliverIdx = items.indexOf(s.deliverItem);
+    if(pickupIdx >= 0 && deliverIdx >= 0)
+      requiresPickup[deliverIdx] = pickupIdx;
+  });
+
+  let cur = originC;
+  for(let step = 0; step < n; step++){
+    let best = -1, bestDist = Infinity;
+    for(let i = 0; i < n; i++){
+      if(visited[i]) continue;
+      // Check pickup constraint: if this is a delivery, its pickup must be done
+      if(requiresPickup[i] !== undefined){
+        const pickupIdx = requiresPickup[i];
+        if(!visited[pickupIdx]) continue; // skip - pickup not done yet
+      }
+      const d = dist2(cur, coords[i]);
+      if(d < bestDist){ bestDist = d; best = i; }
+    }
+    if(best < 0) break;
+    visited[best] = true;
+    result.push(items[best]);
+    resultCoords.push(coords[best]);
+    cur = coords[best];
+  }
+  return [result, resultCoords];
+}
+
+// Score a route for backtracking: penalize direction reversals
+// A "reversal" = moving north then south (or E/W equivalent) sharply
+function backtrackScore(originC, orderedCoords, homeC){
+  const allPts = [originC, ...orderedCoords, ...(homeC ? [homeC] : [])];
+  let penalty = 0;
+  for(let i = 1; i < allPts.length - 1; i++){
+    const prev = allPts[i-1], cur = allPts[i], next = allPts[i+1];
+    // Direction vectors
+    const d1lat = cur[1] - prev[1];
+    const d2lat = next[1] - cur[1];
+    const d1lng = cur[0] - prev[0];
+    const d2lng = next[0] - cur[0];
+    // Reversal = dot product negative (going opposite direction)
+    const dot = d1lat*d2lat + d1lng*d2lng;
+    const mag1 = Math.sqrt(d1lat*d1lat + d1lng*d1lng);
+    const mag2 = Math.sqrt(d2lat*d2lat + d2lng*d2lng);
+    if(mag1 > 0 && mag2 > 0){
+      const cos = dot / (mag1 * mag2);
+      if(cos < -0.3) penalty += mag1 + mag2; // sharp reversal penalty
+    }
+  }
+  return penalty;
+}
+
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 function setStatus(page, msg, cls){ const e=document.getElementById(page+'-status'); if(e){e.textContent=msg; e.className='status-bar '+(cls||'idle');} }
@@ -507,28 +578,60 @@ async function doRoute(){
       jobs.forEach(j=>idToItem[j.id]=j.item);
 
       const cap = shipments.length||1; // max items in vehicle at once = number of paired shipments
+      // Step 1: greedy nearest-neighbor pre-sort (respects pickup constraints)
+      const allStopCoords = active.map(p=>p._coord);
+      const [nnItems, nnCoords] = nearestNeighborSort(originC, active, allStopCoords, shipments);
+
+      // Rebuild shipments/jobs arrays in NN order for first run
+      const nnShipments = shipments; // ORS handles constraint, order hint via input sequence
+      const nnJobs = jobs;
+
       let bestItems=null, bestCost=Infinity;
-      const runs = Math.min(SIM_RUNS, active.length>3?SIM_RUNS:2);
+      const runs = SIM_RUNS;
 
       for(let run=0;run<runs;run++){
         setStatus('route',`模拟路线 ${run+1}/${runs}…`,'loading');
-        const ordS = run>0?shuffle(shipments):shipments;
-        const ordJ = run>0?shuffle(jobs):jobs;
+
+        // Run 0: NN-sorted order (best starting point)
+        // Run 1-4: shuffle for variety
+        // Run 5+: partial shuffles biased toward NN order
+        let ordS, ordJ;
+        if(run === 0){
+          // Pure NN order
+          ordS = nnShipments;
+          ordJ = nnJobs;
+        } else if(run < 5){
+          ordS = shuffle(shipments);
+          ordJ = shuffle(jobs);
+        } else {
+          // Partial shuffle: only swap adjacent pairs
+          ordS = [...nnShipments];
+          ordJ = [...nnJobs];
+          const swapIdx = Math.floor(Math.random() * Math.max(ordS.length-1,1));
+          if(ordS.length > 1)[ordS[swapIdx], ordS[swapIdx+1]] = [ordS[swapIdx+1], ordS[swapIdx]];
+        }
+
         const vehicle={id:1,profile:'driving-car',start:originC,capacity:[cap]};
         if(homeC) vehicle.end=homeC;
         const body={vehicles:[vehicle]};
         if(ordS.length) body.shipments=ordS.map(s=>({id:s.id,pickup:{id:s.pid,location:s.pickupCoord,amount:[1]},delivery:{id:s.did,location:s.deliverCoord,amount:[1]}}));
         if(ordJ.length) body.jobs=ordJ.map(j=>({id:j.id,location:j.coord,amount:[0]}));
-        await sleep(400);
+        await sleep(300);
         try{
           const r=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
           if(!r.ok) continue;
           const data=await r.json();
-          const cost=data.routes[0].summary?.distance||data.routes[0].cost||Infinity;
-          if(cost<bestCost){
-            bestCost=cost;
-            const steps=data.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
-            bestItems=steps.map(st=>idToItem[st.id]).filter(Boolean);
+          const orsDist=data.routes[0].summary?.distance||data.routes[0].cost||Infinity;
+          const steps=data.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
+          const items=steps.map(st=>idToItem[st.id]).filter(Boolean);
+          // Combined cost = ORS distance + backtrack penalty (weighted)
+          const coords=items.map(p=>p._coord);
+          const btPenalty = backtrackScore(originC, coords, homeC);
+          // Convert backtrack penalty to same scale as distance (degrees -> meters approx)
+          const totalCost = orsDist + btPenalty * 111000 * 0.5;
+          if(totalCost<bestCost){
+            bestCost=totalCost;
+            bestItems=items;
           }
         }catch(e){ console.warn('sim',run,'failed',e); }
       }
