@@ -241,11 +241,25 @@ function renderParsed(){
 }
 
 async function geocode(addr){
-  const q=addr+(!/winnipeg/i.test(addr)?', Winnipeg, MB':'')+(!/canada/i.test(addr)?', Canada':'');
-  const r=await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${ORS}&text=${encodeURIComponent(q)}&boundary.country=CA&size=1`);
+  // Add Winnipeg bbox constraint + try multiple results to avoid city-center fallback
+  const hasWpg=/winnipeg/i.test(addr);
+  const hasMB=/\bMB\b/i.test(addr);
+  const hasCA=/canada/i.test(addr);
+  let q=addr;
+  if(!hasWpg) q+=', Winnipeg';
+  if(!hasMB) q+=', MB';
+  if(!hasCA) q+=', Canada';
+  // bbox: Winnipeg area only - prevents random city matches
+  const url=`https://api.openrouteservice.org/geocode/search?api_key=${ORS}&text=${encodeURIComponent(q)}&boundary.country=CA&boundary.rect.min_lon=-97.45&boundary.rect.min_lat=49.70&boundary.rect.max_lon=-96.85&boundary.rect.max_lat=50.15&size=3`;
+  const r=await fetch(url);
   if(!r.ok)throw new Error('Geocode '+r.status);
   const d=await r.json();
   if(!d.features?.length)throw new Error('找不到: '+addr);
+  // Skip locality/region level results (city-center fallbacks), prefer street/address
+  for(const f of d.features){
+    const layer=f.properties.layer||'';
+    if(layer!=='locality'&&layer!=='region'&&layer!=='country') return f.geometry.coordinates;
+  }
   return d.features[0].geometry.coordinates;
 }
 
