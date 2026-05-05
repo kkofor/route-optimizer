@@ -110,10 +110,10 @@ input[type=text]:focus{border-color:var(--green);}
 
 <!-- NAV -->
 <nav class="nav">
-  <button class="nav-btn active" onclick="showPage('scan')">&#128247; 扫描</button>
-  <button class="nav-btn" onclick="showPage('route')">&#9654; 路线</button>
-  <button class="nav-btn" onclick="showPage('orders')">&#128230; 订单</button>
-  <button class="nav-btn" onclick="showPage('stats')">&#128200; 统计</button>
+  <button class="nav-btn active" onclick="showPage('scan',this)">&#128247; 扫描</button>
+  <button class="nav-btn" onclick="showPage('route',this)">&#9654; 路线</button>
+  <button class="nav-btn" onclick="showPage('orders',this)">&#128230; 订单</button>
+  <button class="nav-btn" onclick="showPage('stats',this)">&#128200; 统计</button>
 </nav>
 
 <!-- PAGE: SCAN -->
@@ -212,7 +212,7 @@ input[type=text]:focus{border-color:var(--green);}
 // ── Config ────────────────────────────────────────────────────────
 const AI_BASE = 'https://www.mrafx.ca';
 const AI_TOKEN = 'sk-sub2api-rIdn5H_lvQOWQOcCkPaWUb5BiYT5cLhF';
-const AI_MODEL = 'claude-opus-4-5';
+const AI_MODEL = 'claude-sonnet-4-5-20251001';
 const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
 const SIM_RUNS = 5;
 const STORAGE_KEY = 'dispatch_db';
@@ -220,6 +220,7 @@ const STORAGE_KEY = 'dispatch_db';
 // ── State ─────────────────────────────────────────────────────────
 let db = loadDB();
 let currentImage = null; // base64
+let currentMediaType = 'image/jpeg';
 let pendingOrders = []; // parsed from scan, awaiting confirmation
 let routeOrderedItems = [];
 
@@ -230,7 +231,7 @@ function loadDB(){
 }
 function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
 
-function todayKey(){ return new Date().toISOString().slice(0,10); }
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 function getTodayRecord(){
   const k = todayKey();
@@ -238,18 +239,13 @@ function getTodayRecord(){
   return db[k];
 }
 
-function getJob(jobId){
-  const rec = getTodayRecord();
-  if(!rec.jobs[jobId]) rec.jobs[jobId] = {pickup:'pending', deliver:'pending', addr_pickup:'', addr_deliver:''};
-  return rec.jobs[jobId];
-}
 
 // ── Nav ───────────────────────────────────────────────────────────
-function showPage(name){
+function showPage(name,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  event.target.classList.add('active');
+  if(el) el.classList.add('active');
   if(name==='orders') renderOrders();
   if(name==='stats') renderStats();
 }
@@ -260,6 +256,8 @@ function onImageSelected(e){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
+    const header = ev.target.result.split(',')[0];
+    currentMediaType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
     currentImage = ev.target.result.split(',')[1]; // base64
     const preview = document.getElementById('preview');
     preview.src = ev.target.result;
@@ -319,7 +317,7 @@ async function doScan(){
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: currentImage }},
+            { type: 'image', source: { type: 'base64', media_type: currentMediaType, data: currentImage }},
             { type: 'text', text: prompt }
           ]
         }]
@@ -345,9 +343,9 @@ async function doScan(){
       pendingOrders.push({type, job, addr});
       if(type==='PICKUP') pickupJobs.add(job);
     }
-    // Fix: DELIVER with no PICKUP in this scan and not done = might be deliver_only
+    // Fix: DELIVER with no matching PICKUP in this scan -> DELIVER_ONLY (already in vehicle)
     pendingOrders.forEach(p=>{
-      if(p.type==='DELIVER' && !pickupJobs.has(p.job) && doneJobs.includes(p.job))
+      if(p.type==='DELIVER' && !pickupJobs.has(p.job))
         p.type='DELIVER_ONLY';
     });
 
@@ -388,9 +386,13 @@ function applyAndRoute(){
   const rec = getTodayRecord();
   pendingOrders.forEach(p=>{
     if(!rec.jobs[p.job]) rec.jobs[p.job]={pickup:'pending',deliver:'pending',addr_pickup:'',addr_deliver:''};
-    if(p.type==='PICKUP') rec.jobs[p.job].addr_pickup = p.addr;
-    if(p.type==='DELIVER'||p.type==='DELIVER_ONLY') rec.jobs[p.job].addr_deliver = p.addr;
-    if(p.type==='DELIVER_ONLY') rec.jobs[p.job].pickup = 'done'; // already in vehicle
+    // Only update addr if not already set (prevent re-scan overwrite)
+    if(p.type==='PICKUP' && !rec.jobs[p.job].addr_pickup)
+      rec.jobs[p.job].addr_pickup = p.addr;
+    if((p.type==='DELIVER'||p.type==='DELIVER_ONLY') && !rec.jobs[p.job].addr_deliver)
+      rec.jobs[p.job].addr_deliver = p.addr;
+    if(p.type==='DELIVER_ONLY' && rec.jobs[p.job].pickup!=='done')
+      rec.jobs[p.job].pickup = 'done'; // already in vehicle
   });
   saveDB();
 
@@ -482,7 +484,7 @@ async function doRoute(){
       shipments.forEach(s=>{idToItem[s.pid]=s.pickupItem;idToItem[s.did]=s.deliverItem;});
       jobs.forEach(j=>idToItem[j.id]=j.item);
 
-      const cap = shipments.length+jobs.length||1;
+      const cap = shipments.length||1; // max items in vehicle at once = number of paired shipments
       let bestItems=null, bestCost=Infinity;
       const runs = Math.min(SIM_RUNS, active.length>3?SIM_RUNS:2);
 
@@ -500,7 +502,7 @@ async function doRoute(){
           const r=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
           if(!r.ok) continue;
           const data=await r.json();
-          const cost=data.routes[0].cost||data.routes[0].distance||Infinity;
+          const cost=data.routes[0].summary?.distance||data.routes[0].cost||Infinity;
           if(cost<bestCost){
             bestCost=cost;
             const steps=data.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
