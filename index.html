@@ -3,188 +3,352 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>路线优化 v2</title>
+<title>Route Optimizer v3</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-  :root { --bg:#0f0f0f;--surface:#1a1a1a;--border:#2a2a2a;--accent:#00e5a0;--accent2:#ff6b35;--text:#e8e8e8;--muted:#666;--danger:#ff4444; }
-  * { box-sizing:border-box;margin:0;padding:0; }
-  body { background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;padding:16px;max-width:600px;margin:0 auto; }
-  h1 { font-family:'IBM Plex Mono',monospace;font-size:16px;color:var(--accent);letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border); }
-  .section { background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px; }
-  .section-title { font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px; }
-  textarea { width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;outline:none;resize:vertical;min-height:200px;transition:border-color .2s; }
-  textarea:focus { border-color:var(--accent); }
-  .hint { font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5; }
-  .parsed-list { margin-top:10px; }
-  .parsed-item { display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px; }
-  .parsed-item:last-child { border-bottom:none; }
-  .parsed-num { font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);width:18px;text-align:right;flex-shrink:0; }
-  .parsed-addr { flex:1; }
-  .toggle-row { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
-  .toggle-label { font-size:13px;flex:1; }
-  .toggle { position:relative;width:40px;height:22px;flex-shrink:0; }
-  .toggle input { opacity:0;width:0;height:0; }
-  .slider { position:absolute;inset:0;background:var(--border);border-radius:11px;cursor:pointer;transition:background .2s; }
-  .slider:before { content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:white;border-radius:50%;transition:transform .2s; }
-  input:checked+.slider { background:var(--accent); }
-  input:checked+.slider:before { transform:translateX(18px); }
-  input[type="text"] { width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;outline:none;transition:border-color .2s;margin-bottom:8px; }
-  input[type="text"]:focus { border-color:var(--accent); }
-  .btn-main { background:var(--accent);border:none;border-radius:8px;color:#000;padding:14px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;width:100%;letter-spacing:.05em;transition:opacity .2s;margin-bottom:8px; }
-  .btn-main:hover { opacity:.85; }
-  .btn-main:disabled { opacity:.35;cursor:not-allowed; }
-  .btn-secondary { background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:12px;width:100%;transition:all .2s;margin-bottom:12px; }
-  .btn-secondary:hover { border-color:var(--accent);color:var(--accent); }
-  .status { font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);text-align:center;padding:8px;min-height:30px; }
-  .status.loading { color:var(--accent); }
-  .status.error { color:var(--danger); }
-  .status.success { color:var(--accent); }
-  .stats-row { display:flex;gap:10px;margin-bottom:12px; }
-  .stat { flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center; }
-  .stat-val { font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--accent);font-weight:600; }
-  .stat-label { font-size:10px;color:var(--muted);margin-top:3px; }
-  .result-item { display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start; }
-  .result-item:last-child { border-bottom:none; }
-  .result-num { font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--accent);color:#000;width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;margin-top:1px; }
-  .result-num.special { background:var(--accent2); }
-  .result-addr { font-size:13px;line-height:1.4;flex:1; }
-  .maps-segment { margin-bottom:10px; }
-  .maps-seg-label { font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:4px; }
-  .maps-btn { display:block;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:11px 14px;text-decoration:none;font-family:'IBM Plex Mono',monospace;font-size:12px;transition:border-color .2s; }
-  .maps-btn:hover { border-color:var(--accent);color:var(--accent); }
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700&display=swap');
+:root{--bg:#0a0a0a;--s1:#111;--s2:#1a1a1a;--b:#252525;--b2:#333;--green:#00ff88;--orange:#ff7b00;--blue:#4488ff;--red:#ff4455;--text:#ddd;--muted:#555;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
+h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
+.card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}
+textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
+textarea:focus{border-color:var(--green);}
+.hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
+.hint code{color:var(--orange);background:var(--s2);padding:1px 4px;border-radius:2px;}
+input[type=text]{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:9px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;outline:none;margin-bottom:8px;}
+input[type=text]:focus{border-color:var(--green);}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.row label{font-size:12px;flex:1;}
+.toggle{position:relative;width:38px;height:20px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.knob{position:absolute;inset:0;background:var(--b2);border-radius:10px;cursor:pointer;transition:background .2s;}
+.knob:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#888;border-radius:50%;transition:transform .2s,background .2s;}
+input:checked+.knob{background:var(--green);}
+input:checked+.knob:before{transform:translateX(18px);background:#000;}
+.btn-parse{width:100%;background:none;border:1px dashed var(--b2);border-radius:4px;color:var(--muted);padding:9px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:8px;transition:all .2s;}
+.btn-parse:hover{border-color:var(--green);color:var(--green);}
+.btn-run{width:100%;background:var(--green);border:none;border-radius:6px;color:#000;padding:13px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.08em;margin-bottom:8px;transition:opacity .2s;}
+.btn-run:hover{opacity:.85;}
+.btn-run:disabled{opacity:.3;cursor:not-allowed;}
+.status{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-align:center;padding:6px;min-height:28px;}
+.status.loading{color:var(--green);}
+.status.error{color:var(--red);}
+.status.ok{color:var(--green);}
+/* Parsed list */
+.parsed-item{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--b);}
+.parsed-item:last-child{border-bottom:none;}
+.p-type{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 5px;border-radius:3px;flex-shrink:0;margin-top:2px;}
+.p-type.pickup{background:#0d2e1a;color:var(--green);}
+.p-type.deliver{background:#2e1a0d;color:var(--orange);}
+.p-type.deliver_only{background:#0d1a2e;color:var(--blue);}
+.p-type.home{background:#2e2e0d;color:#ffee44;}
+.p-job{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);flex-shrink:0;margin-top:2px;width:56px;}
+.p-addr{font-size:12px;flex:1;line-height:1.4;}
+.p-warn{font-size:9px;color:var(--red);margin-top:2px;}
+/* Stats */
+.stats{display:flex;gap:8px;margin-bottom:10px;}
+.stat{flex:1;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;text-align:center;}
+.stat-v{font-family:'JetBrains Mono',monospace;font-size:17px;color:var(--green);font-weight:700;}
+.stat-l{font-size:9px;color:var(--muted);margin-top:2px;}
+/* Route list */
+.r-item{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--b);align-items:flex-start;}
+.r-item:last-child{border-bottom:none;}
+.r-num{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--green);color:#000;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+.r-num.sp{background:var(--orange);}
+.r-body{flex:1;}
+.r-addr{font-size:12px;line-height:1.4;}
+.r-meta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;}
+.r-tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;padding:1px 5px;border-radius:2px;margin-right:4px;}
+.r-tag.pickup{background:#0d2e1a;color:var(--green);}
+.r-tag.deliver{background:#2e1a0d;color:var(--orange);}
+.r-tag.deliver_only{background:#0d1a2e;color:var(--blue);}
+/* Maps */
+.maps-seg{margin-bottom:8px;}
+.maps-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:3px;}
+.maps-a{display:block;background:var(--s2);border:1px solid var(--b);border-radius:4px;color:var(--text);padding:10px 12px;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:11px;transition:border-color .2s;}
+.maps-a:hover{border-color:var(--green);color:var(--green);}
+/* Unpaired warning */
+.warn-box{background:#2e0d0d;border:1px solid var(--red);border-radius:4px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--red);}
 </style>
 </head>
 <body>
-<h1>&#9658; ROUTE OPTIMIZER v2</h1>
-<div class="section">
-  <div class="section-title">&#9312; 粘贴 Claude 输出的地址</div>
-  <textarea id="paste-input" placeholder="直接粘贴 Claude 给你的路线清单"></textarea>
-  <div class="hint">支持带编号、emoji、中文标注的格式，自动提取地址行</div>
-  <button class="btn-secondary" onclick="parseInput()" style="margin-top:10px;margin-bottom:0">解析地址 →</button>
-  <div id="parsed-preview" class="parsed-list" style="display:none"></div>
+<h1>&#9658;&#9658; Route Optimizer v3</h1>
+
+<div class="card">
+  <div class="card-title">① 粘贴 Claude 输出</div>
+  <textarea id="paste-in" placeholder="格式：每行一条
+PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
+DELIVER|2394568|101 Amber Trail, Winnipeg, MB R2P
+DELIVER_ONLY|2393945|14 Wentwood Crescent, Winnipeg, MB R2P 2A8
+HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
+  <div class="hint">格式：<code>PICKUP|Job号|地址</code> / <code>DELIVER|Job号|地址</code> / <code>DELIVER_ONLY|任意|地址</code> / <code>HOME|地址</code></div>
+  <button class="btn-parse" onclick="doParse()">解析 →</button>
+  <div id="parsed-out" style="margin-top:10px;display:none"></div>
 </div>
-<div class="section">
-  <div class="section-title">&#9313; 设置</div>
-  <div class="toggle-row">
-    <span class="toggle-label">自动优化顺序（ORS）</span>
-    <label class="toggle"><input type="checkbox" id="do-optimize" checked><span class="slider"></span></label>
+
+<div class="card">
+  <div class="card-title">② 设置</div>
+  <div class="row">
+    <label>ORS 自动优化顺序</label>
+    <label class="toggle"><input type="checkbox" id="do-opt" checked><span class="knob"></span></label>
   </div>
-  <div class="toggle-row">
-    <span class="toggle-label">终点固定为家</span>
-    <label class="toggle"><input type="checkbox" id="fix-home" checked><span class="slider"></span></label>
+  <div class="row" style="margin-bottom:10px">
+    <label>终点固定为家</label>
+    <label class="toggle"><input type="checkbox" id="fix-home" checked><span class="knob"></span></label>
   </div>
-  <input type="text" id="home-addr" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="家的地址">
-  <div class="toggle-row" style="margin-bottom:0"><span class="toggle-label">起点</span></div>
-  <input type="text" id="origin-addr" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="当前位置" style="margin-bottom:0">
+  <input type="text" id="origin" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="起点（当前位置）">
+  <input type="text" id="home" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="家的地址" style="margin-bottom:0">
 </div>
-<button class="btn-main" onclick="runOptimize()" id="btn-run">&#9654; 优化并生成导航</button>
+
+<button class="btn-run" id="btn-run" onclick="doRun()">&#9654; 优化并生成导航</button>
 <div class="status" id="status"></div>
-<div id="result-section" style="display:none">
-  <div class="section">
-    <div class="section-title">路线统计</div>
-    <div class="stats-row">
-      <div class="stat"><div class="stat-val" id="stat-dist">—</div><div class="stat-label">km</div></div>
-      <div class="stat"><div class="stat-val" id="stat-time">—</div><div class="stat-label">分钟</div></div>
-      <div class="stat"><div class="stat-val" id="stat-stops">—</div><div class="stat-label">站点</div></div>
+
+<div id="results" style="display:none">
+  <div class="card">
+    <div class="card-title">路线统计</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-v" id="s-dist">—</div><div class="stat-l">km 驾驶</div></div>
+      <div class="stat"><div class="stat-v" id="s-time">—</div><div class="stat-l">分钟</div></div>
+      <div class="stat"><div class="stat-v" id="s-stops">—</div><div class="stat-l">站点</div></div>
     </div>
   </div>
-  <div class="section"><div class="section-title">优化后顺序</div><div id="route-list"></div></div>
-  <div class="section"><div class="section-title">Google Maps 导航链接</div><div id="maps-links"></div></div>
+  <div class="card"><div class="card-title">优化路线</div><div id="route-out"></div></div>
+  <div class="card"><div class="card-title">Google Maps 导航</div><div id="maps-out"></div></div>
 </div>
+
 <script>
-const ORS_KEY='eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
-let parsedAddresses=[];
-function parseInput(){
-  const raw=document.getElementById('paste-input').value;
+const ORS='eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
+
+let parsed=[];
+
+function doParse(){
+  const raw=document.getElementById('paste-in').value.trim();
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
-  const addresses=[];
+  parsed=[];
   for(const line of lines){
-    const cleaned=line.replace(/^\d+\.\s*/,'').replace(/^[\u{1F4E4}\u{1F4E5}\u{1F504}\u{1F519}\u{1F3E0}\u2705\u23F3\u{1F4E6}\u26A0}]+\s*/u,'').replace(/^(取件|送件|Transfer|退回|回家)[—\-\s]*/u,'').replace(/\s*\(Job\s*\d+\)/gi,'').trim();
-    const hasNumber=/\d/.test(cleaned);
-    const hasStreetWord=/(st|ave|blvd|dr|cres|crescent|trail|rd|way|hwy|pkwy|cove|place|pl|court|ct|circle|lane|ln|drive|street|avenue|road)/i.test(cleaned);
-    const hasWinnipeg=/winnipeg|MB|R\d[A-Z]\s*\d[A-Z]\d/i.test(cleaned);
-    if(cleaned.length<8)continue;
-    if(/^(今日|剩余|已完成|当前位置|进度|路线|导航|google)/i.test(cleaned))continue;
-    if(/^(job \d+|#\d+)/i.test(cleaned))continue;
-    if(hasNumber&&(hasStreetWord||hasWinnipeg)){
-      let addr=cleaned;
-      if(!/winnipeg/i.test(addr))addr+=', Winnipeg, MB';
-      if(!/canada|MB/i.test(addr))addr+=', Canada';
-      addresses.push({raw:cleaned,addr,include:true});
+    const parts=line.split('|');
+    if(parts.length<2)continue;
+    const type=parts[0].trim().toUpperCase();
+    if(type==='HOME'){
+      const addr=parts.slice(1).join('|').trim();
+      if(addr)parsed.push({type:'HOME',job:null,addr,include:true});
+    } else if(['PICKUP','DELIVER','DELIVER_ONLY'].includes(type)&&parts.length>=3){
+      const job=parts[1].trim();
+      const addr=parts.slice(2).join('|').trim();
+      if(addr)parsed.push({type,job,addr,include:true});
     }
   }
-  parsedAddresses=addresses;
-  const preview=document.getElementById('parsed-preview');
-  if(addresses.length===0){preview.style.display='block';preview.innerHTML='<div style="color:var(--danger);font-size:12px;padding:8px 0">未识别到地址</div>';return;}
-  preview.style.display='block';
-  preview.innerHTML=addresses.map((a,i)=>`<div class="parsed-item"><span class="parsed-num">${i+1}</span><span class="parsed-addr">${a.raw}</span><label class="toggle" style="width:34px;height:20px"><input type="checkbox" checked onchange="parsedAddresses[${i}].include=this.checked"><span class="slider"></span></label></div>`).join('');
+  renderParsed();
 }
-async function geocode(address){
-  const url=`https://api.openrouteservice.org/geocode/search?api_key=${ORS_KEY}&text=${encodeURIComponent(address)}&boundary.country=CA&size=1`;
-  const r=await fetch(url);
-  if(!r.ok)throw new Error(`Geocode HTTP ${r.status}`);
+
+function renderParsed(){
+  const el=document.getElementById('parsed-out');
+  if(parsed.length===0){el.style.display='block';el.innerHTML='<div style="color:var(--red);font-size:11px">未识别到有效行，请检查格式</div>';return;}
+  // Check pairing
+  const pickups=parsed.filter(p=>p.type==='PICKUP').map(p=>p.job);
+  const delivers=parsed.filter(p=>p.type==='DELIVER').map(p=>p.job);
+  const unpairedPickup=pickups.filter(j=>!delivers.includes(j));
+  const unpairedDeliver=delivers.filter(j=>!pickups.includes(j));
+  let warn='';
+  if(unpairedPickup.length)warn+=`<div class="warn-box">⚠ 以下取件无对应送件: ${unpairedPickup.join(', ')}</div>`;
+  if(unpairedDeliver.length>0){
+    // These are in-vehicle already - mark them
+    parsed.forEach(p=>{if(p.type==='DELIVER'&&!pickups.includes(p.job))p.type='DELIVER_ONLY';});
+  }
+  el.style.display='block';
+  el.innerHTML=warn+parsed.map((p,i)=>{
+    const tc=p.type==='PICKUP'?'pickup':p.type==='DELIVER'?'deliver':p.type==='DELIVER_ONLY'?'deliver_only':'home';
+    const label=p.type==='PICKUP'?'取件':p.type==='DELIVER'?'送件':p.type==='DELIVER_ONLY'?'送件(车上)':'家';
+    return `<div class="parsed-item">
+      <span class="p-type ${tc}">${label}</span>
+      <span class="p-job">${p.job||''}</span>
+      <div style="flex:1">
+        <div class="p-addr">${p.addr}</div>
+      </div>
+      <label class="toggle" style="width:34px;height:20px;flex-shrink:0">
+        <input type="checkbox" ${p.include?'checked':''} onchange="parsed[${i}].include=this.checked">
+        <span class="knob"></span>
+      </label>
+    </div>`;
+  }).join('');
+}
+
+async function geocode(addr){
+  const q=addr+(!/winnipeg/i.test(addr)?', Winnipeg, MB':'')+(!/canada/i.test(addr)?', Canada':'');
+  const r=await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${ORS}&text=${encodeURIComponent(q)}&boundary.country=CA&size=1`);
+  if(!r.ok)throw new Error('Geocode '+r.status);
   const d=await r.json();
-  if(!d.features||d.features.length===0)throw new Error(`找不到: ${address}`);
+  if(!d.features?.length)throw new Error('找不到: '+addr);
   return d.features[0].geometry.coordinates;
 }
-async function runOptimize(){
-  const btn=document.getElementById('btn-run');
-  if(parsedAddresses.length===0)parseInput();
-  const active=parsedAddresses.filter(a=>a.include);
-  if(active.length===0){setStatus('请先粘贴地址并解析','error');return;}
-  const originStr=document.getElementById('origin-addr').value.trim();
-  const homeStr=document.getElementById('home-addr').value.trim();
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function setStatus(msg,cls=''){const e=document.getElementById('status');e.textContent=msg;e.className='status '+cls;}
+
+async function doRun(){
+  if(parsed.length===0)doParse();
+  const active=parsed.filter(p=>p.include&&p.type!=='HOME');
+  if(!active.length){setStatus('没有有效站点','error');return;}
+
+  const originStr=document.getElementById('origin').value.trim();
+  const homeStr=document.getElementById('home').value.trim();
   const fixHome=document.getElementById('fix-home').checked;
-  const doOptimize=document.getElementById('do-optimize').checked;
+  const doOpt=document.getElementById('do-opt').checked;
+
+  const btn=document.getElementById('btn-run');
   btn.disabled=true;
-  document.getElementById('result-section').style.display='none';
+  document.getElementById('results').style.display='none';
+
   try{
-    const allStrs=[originStr,...active.map(a=>a.addr)];
-    if(fixHome)allStrs.push(homeStr);
+    // Geocode all addresses
+    const allAddrs=[originStr,...active.map(p=>p.addr),...(fixHome?[homeStr]:[])];
     const coords=[];
-    for(let i=0;i<allStrs.length;i++){setStatus(`解析地址 ${i+1}/${allStrs.length}…`,'loading');coords.push(await geocode(allStrs[i]));await sleep(350);}
-    const originCoord=coords[0];
-    const destCoord=coords[coords.length-1];
-    const stopCoords=fixHome?coords.slice(1,-1):coords.slice(1);
-    const stopStrs=active.map(a=>a.raw);
-    let orderedStops,orderedCoords;
-    if(doOptimize&&stopCoords.length>1){
-      setStatus('ORS 路线优化中…','loading');
-      const body={vehicles:[{id:1,profile:'driving-car',start:originCoord,end:destCoord}],jobs:stopCoords.map((c,i)=>({id:i+1,location:c,description:stopStrs[i]}))};
-      const res=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(!res.ok){const err=await res.text();throw new Error(`ORS优化失败: ${err.slice(0,100)}`);}
-      const data=await res.json();
-      const steps=data.routes[0].steps.filter(s=>s.type==='job');
-      orderedStops=steps.map(s=>stopStrs[s.id-1]);
-      orderedCoords=steps.map(s=>stopCoords[s.id-1]);
-    }else{orderedStops=stopStrs;orderedCoords=stopCoords;}
-    setStatus('计算驾驶距离…','loading');
-    const allCoords=[originCoord,...orderedCoords,destCoord];
-    const dirRes=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify({coordinates:allCoords})});
-    let totalDist='—',totalTime='—';
-    if(dirRes.ok){const dirData=await dirRes.json();const s=dirData.routes?.[0]?.summary;if(s){totalDist=(s.distance/1000).toFixed(1);totalTime=Math.round(s.duration/60);}}
-    document.getElementById('stat-dist').textContent=totalDist;
-    document.getElementById('stat-time').textContent=totalTime;
-    document.getElementById('stat-stops').textContent=orderedStops.length;
-    const fullLabels=[originStr,...orderedStops,...(fixHome?[homeStr]:[])];
-    document.getElementById('route-list').innerHTML=fullLabels.map((addr,i)=>{const isSpecial=i===0||i===fullLabels.length-1;const numLabel=i===0?'★':i===fullLabels.length-1?'🏠':i;return`<div class="result-item"><div class="result-num ${isSpecial?'special':''}">${numLabel}</div><div class="result-addr">${addr}</div></div>`;}).join('');
-    const mapsContainer=document.getElementById('maps-links');mapsContainer.innerHTML='';
-    const CHUNK=9;
-    for(let i=0;i<fullLabels.length-1;i+=CHUNK){
-      const seg=fullLabels.slice(i,Math.min(i+CHUNK+1,fullLabels.length));
-      const url='https://www.google.com/maps/dir/'+seg.map(a=>encodeURIComponent(a)).join('/');
-      const segNum=Math.floor(i/CHUNK)+1;const totalSegs=Math.ceil((fullLabels.length-1)/CHUNK);
-      const div=document.createElement('div');div.className='maps-segment';
-      div.innerHTML=`<div class="maps-seg-label">${totalSegs>1?`第 ${segNum}/${totalSegs} 段`:'完整路线'} · ${seg.length} 站</div><a href="${url}" target="_blank" class="maps-btn">&#9654; 打开 Google Maps 导航</a>`;
-      mapsContainer.appendChild(div);
+    for(let i=0;i<allAddrs.length;i++){
+      setStatus(`解析地址 ${i+1}/${allAddrs.length}…`,'loading');
+      coords.push(await geocode(allAddrs[i]));
+      await sleep(300);
     }
-    document.getElementById('result-section').style.display='block';
-    setStatus('✓ 完成','success');
-  }catch(e){setStatus('错误：'+e.message,'error');console.error(e);}
+
+    const originC=coords[0];
+    const homeC=fixHome?coords[coords.length-1]:null;
+    const stopC=fixHome?coords.slice(1,-1):coords.slice(1);
+
+    let orderedItems,orderedCoords;
+
+    if(doOpt&&active.length>1){
+      setStatus('ORS 路线优化（含取送约束）…','loading');
+
+      // Build shipments (paired pickup+deliver) and jobs (deliver_only)
+      const shipments=[];
+      const jobs=[];
+      let sid=1,jid=1;
+
+      // Group by job id
+      const byJob={};
+      active.forEach((p,i)=>{
+        if(p.type==='PICKUP'||p.type==='DELIVER'){
+          if(!byJob[p.job])byJob[p.job]={};
+          byJob[p.job][p.type]={item:p,coord:stopC[i]};
+        }
+      });
+
+      active.forEach((p,i)=>{
+        if(p.type==='DELIVER_ONLY'){
+          jobs.push({id:jid++,location:stopC[i],description:p.addr,_item:p,_idx:i});
+        }
+      });
+
+      Object.entries(byJob).forEach(([job,pair])=>{
+        if(pair.PICKUP&&pair.DELIVER){
+          shipments.push({
+            id:sid++,
+            pickup:{id:sid*100,location:pair.PICKUP.coord,description:pair.PICKUP.item.addr},
+            delivery:{id:sid*100+1,location:pair.DELIVER.coord,description:pair.DELIVER.item.addr},
+            _pickup:pair.PICKUP,_deliver:pair.DELIVER
+          });
+        } else if(pair.DELIVER&&!pair.PICKUP){
+          // orphan deliver - treat as job
+          const idx=active.indexOf(pair.DELIVER.item);
+          jobs.push({id:jid++,location:pair.DELIVER.coord,description:pair.DELIVER.item.addr,_item:pair.DELIVER.item,_idx:idx});
+        }
+      });
+
+      const vehicle={id:1,profile:'driving-car',start:originC};
+      if(homeC)vehicle.end=homeC;
+
+      const body={vehicles:[vehicle]};
+      if(shipments.length)body.shipments=shipments.map(s=>({id:s.id,pickup:{id:s.id*100,location:s._pickup.coord,description:s._pickup.item.addr},delivery:{id:s.id*100+1,location:s._deliver.coord,description:s._deliver.item.addr}}));
+      if(jobs.length)body.jobs=jobs.map(j=>({id:j.id,location:j.location,description:j.description}));
+
+      const res=await fetch('https://api.openrouteservice.org/optimization',{
+        method:'POST',
+        headers:{'Authorization':ORS,'Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      });
+      if(!res.ok){const t=await res.text();throw new Error('ORS: '+t.slice(0,120));}
+      const data=await res.json();
+
+      // Reconstruct ordered list from steps
+      const steps=data.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
+      orderedItems=[];orderedCoords=[];
+
+      // Build lookup maps
+      const shipMap={};
+      shipments.forEach(s=>{shipMap[s.id*100]={item:s._pickup.item,coord:s._pickup.coord};shipMap[s.id*100+1]={item:s._deliver.item,coord:s._deliver.coord};});
+      const jobMap={};
+      jobs.forEach(j=>{jobMap[j.id]={item:j._item,coord:j.location};});
+
+      steps.forEach(st=>{
+        if(st.type==='pickup'||st.type==='delivery'){
+          const m=shipMap[st.id];
+          if(m){orderedItems.push(m.item);orderedCoords.push(m.coord);}
+        } else if(st.type==='job'){
+          const m=jobMap[st.id];
+          if(m){orderedItems.push(m.item);orderedCoords.push(m.coord);}
+        }
+      });
+
+    } else {
+      orderedItems=active;orderedCoords=stopC;
+    }
+
+    // Driving stats
+    setStatus('计算驾驶距离…','loading');
+    const allC=[originC,...orderedCoords,...(homeC?[homeC]:[])];
+    let dist='—',time='—';
+    try{
+      const dr=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{
+        method:'POST',headers:{'Authorization':ORS,'Content-Type':'application/json'},
+        body:JSON.stringify({coordinates:allC})
+      });
+      if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
+    }catch(e){}
+
+    document.getElementById('s-dist').textContent=dist;
+    document.getElementById('s-time').textContent=time;
+    document.getElementById('s-stops').textContent=orderedItems.length;
+
+    // Render route
+    const allLabels=[{addr:originStr,type:'ORIGIN'},{...orderedItems},{addr:originStr}];
+    const fullItems=[{addr:originStr,type:'ORIGIN'},...orderedItems,...(fixHome?[{addr:homeStr,type:'HOME'}]:[])];
+    const routeEl=document.getElementById('route-out');
+    routeEl.innerHTML=fullItems.map((p,i)=>{
+      const isEdge=i===0||i===fullItems.length-1;
+      const num=i===0?'★':i===fullItems.length-1?'⌂':i;
+      const tc=p.type==='PICKUP'?'pickup':p.type==='DELIVER'||p.type==='DELIVER_ONLY'?'deliver':p.type==='DELIVER_ONLY'?'deliver_only':'';
+      const label=p.type==='PICKUP'?'取件':p.type==='DELIVER'?'送件':p.type==='DELIVER_ONLY'?'送件(车上)':p.type==='HOME'?'家':p.type==='ORIGIN'?'起点':'';
+      const jobStr=p.job?` · Job ${p.job}`:'';
+      return `<div class="r-item">
+        <div class="r-num ${isEdge?'sp':''}">${num}</div>
+        <div class="r-body">
+          ${tc?`<span class="r-tag ${tc}">${label}${jobStr}</span>`:''}
+          <div class="r-addr">${p.addr}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Maps links
+    const addrList=fullItems.map(p=>p.addr);
+    const mapsEl=document.getElementById('maps-out');
+    mapsEl.innerHTML='';
+    const CHUNK=9;
+    const totalSegs=Math.ceil((addrList.length-1)/CHUNK);
+    for(let i=0;i<addrList.length-1;i+=CHUNK){
+      const seg=addrList.slice(i,Math.min(i+CHUNK+1,addrList.length));
+      const url='https://www.google.com/maps/dir/'+seg.map(a=>encodeURIComponent(a)).join('/');
+      const sn=Math.floor(i/CHUNK)+1;
+      const div=document.createElement('div');div.className='maps-seg';
+      div.innerHTML=`<div class="maps-lbl">${totalSegs>1?`段 ${sn}/${totalSegs}`:'完整路线'} · ${seg.length} 站</div><a href="${url}" target="_blank" class="maps-a">&#9654; 打开 Google Maps</a>`;
+      mapsEl.appendChild(div);
+    }
+
+    document.getElementById('results').style.display='block';
+    setStatus('✓ 完成','ok');
+
+  }catch(e){setStatus('错误: '+e.message,'error');console.error(e);}
   finally{btn.disabled=false;}
 }
-function setStatus(msg,cls=''){const el=document.getElementById('status');el.textContent=msg;el.className='status '+cls;}
-function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 </script>
 </body>
 </html>
