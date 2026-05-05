@@ -134,7 +134,9 @@ input[type=text]:focus{border-color:var(--green);}
 
   <div class="card">
     <div class="card-title">当前位置</div>
-    <input type="text" id="current-loc" placeholder="e.g. 99 Killarney Avenue, Winnipeg, MB R3T 3B3">
+    <input type="text" id="current-loc" placeholder="输入门牌号或完整地址，如 14 或 99"
+      oninput="smartLocMatch(this.value)" autocomplete="off">
+    <div id="loc-suggestions" style="display:none;margin-top:4px;border:1px solid var(--b);border-radius:4px;overflow:hidden;"></div>
   </div>
 
   <button class="btn btn-green" id="btn-scan" onclick="doScan()" disabled>&#9654; AI 解析订单</button>
@@ -373,6 +375,8 @@ async function doScan(){
     // Auto-fill current location
     const locInput = document.getElementById('current-loc').value.trim();
     if(locInput) document.getElementById('route-origin').value = locInput;
+    // Re-run smart match with new addresses loaded
+    smartLocMatch(locInput);
 
     renderParsedOrders();
     document.getElementById('scan-result').style.display = 'block';
@@ -408,6 +412,57 @@ function renderParsedOrders(){
       <div class="o-addr">${p.addr}${newTag}${doneTag}</div>
     </div>`;
   }).join('');
+}
+
+// ── Smart location match ─────────────────────────────────────────
+function smartLocMatch(val){
+  const sug = document.getElementById('loc-suggestions');
+  val = val.trim();
+  if(!val || val.length < 1){ sug.style.display='none'; return; }
+
+  // Collect all known addresses from today's DB
+  const rec = getTodayRecord();
+  const candidates = [];
+  Object.values(rec.jobs).forEach(job => {
+    if(job.addr_pickup) candidates.push(job.addr_pickup);
+    if(job.addr_deliver) candidates.push(job.addr_deliver);
+  });
+  // Also add home
+  candidates.push(document.getElementById('route-home').value);
+
+  // If pure number: match by street number prefix
+  const isNum = /^\d+$/.test(val);
+  const matches = candidates.filter(addr => {
+    if(!addr) return false;
+    if(isNum){
+      // Match if address starts with this number
+      const addrNum = addr.match(/^(\d+)/);
+      return addrNum && addrNum[1] === val;
+    } else {
+      // Partial string match (case insensitive)
+      return addr.toLowerCase().includes(val.toLowerCase());
+    }
+  });
+
+  // Deduplicate
+  const unique = [...new Set(matches)];
+
+  if(!unique.length){ sug.style.display='none'; return; }
+
+  sug.style.display = 'block';
+  sug.innerHTML = unique.map(addr =>
+    `<div onclick="selectLoc('${addr.replace(/'/g,"\'")}')"
+      style="padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--b);background:var(--surface);transition:background .15s;"
+      onmouseover="this.style.background='var(--s2)'"
+      onmouseout="this.style.background='var(--surface)'"
+    >${addr}</div>`
+  ).join('');
+}
+
+function selectLoc(addr){
+  document.getElementById('current-loc').value = addr;
+  document.getElementById('loc-suggestions').style.display = 'none';
+  document.getElementById('route-origin').value = addr;
 }
 
 function applyAndRoute(){
