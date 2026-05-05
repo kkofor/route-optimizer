@@ -346,144 +346,62 @@ async function doRun(){
     let orderedItems;
 
     if(doOpt&&active.length>1){
-      // Step 2: Build all locations list for matrix
-      // Index 0 = origin, 1..n = stops, n+1 = home (if fixHome)
+      // Step 2: ORS Matrix API - real driving durations between ALL points
+      // allLocs: [origin, stop0, stop1, ..., home]
       const allLocs=[originC,...stopCoords,...(homeC?[homeC]:[])];
-      const n=allLocs.length;
-
-      // Step 3: Call ORS Matrix API - get real driving duration matrix
-      setStatus('计算真实路网距离矩阵…','loading');
-      const matrixRes=await fetch('https://api.openrouteservice.org/v2/matrix/driving-car',{
+      setStatus('获取真实路网时间矩阵…','loading');
+      const matRes=await fetch('https://api.openrouteservice.org/v2/matrix/driving-car',{
         method:'POST',
         headers:{'Authorization':ORS,'Content-Type':'application/json'},
-        body:JSON.stringify({
-          locations:allLocs,
-          metrics:['duration','distance'],
-          resolve_locations:false
-        })
+        body:JSON.stringify({locations:allLocs,metrics:['duration']})
       });
-      if(!matrixRes.ok){const t=await matrixRes.text();throw new Error('Matrix API: '+t.slice(0,100));}
-      const matrixData=await matrixRes.json();
-      const durMatrix=matrixData.durations; // n×n real driving durations
+      if(!matRes.ok){const t=await matRes.text();throw new Error('Matrix: '+t.slice(0,100));}
+      const matData=await matRes.json();
+      const durMatrix=matData.durations; // N×N real driving durations in seconds
 
-      // Step 4: Build VROOM shipments/jobs using location_index (not coordinates)
-      // Origin=index 0, stops=1..stopCoords.length, home=last index
-      const homeIdx=fixHome?allLocs.length-1:null;
-
-      const byJob={};
-      active.forEach((p,si)=>{
-        if(p.type==='PICKUP'||p.type==='DELIVER'){
-          if(!byJob[p.job])byJob[p.job]={};
-          byJob[p.job][p.type]={item:p,locIdx:si+1}; // +1 because origin is index 0
+      // Step 3: Build pickup->delivery constraint map
+      // requiresPickup[i] = j means item[i] (delivery) requires item[j] (pickup) done first
+      const requiresPickup={};
+      active.forEach((p,i)=>{
+        if(p.type==='DELIVER'){
+          const pickupIdx=active.findIndex(q=>q.type==='PICKUP'&&q.job===p.job);
+          if(pickupIdx>=0) requiresPickup[i]=pickupIdx;
         }
       });
 
-      const shipments=[];
-      let sIdx=0;
-      Object.entries(byJob).forEach(([job,pair])=>{
-        if(pair.PICKUP&&pair.DELIVER){
-          const pid=sIdx*2+1;
-          const did=sIdx*2+2;
-          shipments.push({
-            id:sIdx+1,pid,did,
-            pickupLocIdx:pair.PICKUP.locIdx,
-            deliverLocIdx:pair.DELIVER.locIdx,
-            pickupItem:pair.PICKUP.item,
-            deliverItem:pair.DELIVER.item
-          });
-          sIdx++;
+      // Step 4: Greedy nearest-neighbor with real matrix + pickup constraint
+      // Matrix indices: 0=origin, 1..n=stops, last=home
+      const n=active.length;
+      const visited=new Array(n).fill(false);
+      const orderIdx=[];
+      let curMatIdx=0; // start at origin (index 0 in matrix)
+
+      for(let step=0;step<n;step++){
+        let best=-1,bestDur=Infinity;
+        for(let i=0;i<n;i++){
+          if(visited[i]) continue;
+          // Enforce pickup-before-delivery constraint
+          if(requiresPickup[i]!==undefined&&!visited[requiresPickup[i]]) continue;
+          const matIdx=i+1; // stop i is at matrix index i+1
+          const d=durMatrix[curMatIdx][matIdx];
+          if(d<bestDur){bestDur=d;best=i;}
         }
-      });
-
-      const vroomJobs=[];
-      let jIdx=1000;
-      active.forEach((p,si)=>{
-        if(p.type==='DELIVER_ONLY'){
-          vroomJobs.push({id:jIdx++,locIdx:si+1,item:p});
-        }
-      });
-
-      const idToItem={};
-      shipments.forEach(s=>{idToItem[s.pid]=s.pickupItem;idToItem[s.did]=s.deliverItem;});
-      vroomJobs.forEach(j=>idToItem[j.id]=j.item);
-
-      const cap=shipments.length||1;
-
-      // Step 5: Build VROOM body with custom matrix
-      // Using location_index instead of coordinates
-      const vehicle={
-        id:1,
-        profile:'driving-car',
-        start_index:0,
-        capacity:[cap]
-      };
-      if(homeIdx!==null) vehicle.end_index=homeIdx;
-      else vehicle.end_index=0;
-
-      const orsBody={
-        vehicles:[vehicle],
-        matrices:{
-          'driving-car':{
-            durations:durMatrix
-          }
-        },
-        // locations array required when using location_index
-        // each entry: [lng, lat]
-        locations: allLocs
-      };
-
-      if(shipments.length){
-        orsBody.shipments=shipments.map(s=>({
-          id:s.id,
-          pickup:{
-            id:s.pid,
-            location:allLocs[s.pickupLocIdx],
-            location_index:s.pickupLocIdx,
-            amount:[1]
-          },
-          delivery:{
-            id:s.did,
-            location:allLocs[s.deliverLocIdx],
-            location_index:s.deliverLocIdx,
-            amount:[1]
-          }
-        }));
-      }
-      if(vroomJobs.length){
-        orsBody.jobs=vroomJobs.map(j=>({
-          id:j.id,
-          location:allLocs[j.locIdx],
-          location_index:j.locIdx,
-          amount:[0]
-        }));
+        if(best<0) break;
+        visited[best]=true;
+        orderIdx.push(best);
+        curMatIdx=best+1;
       }
 
-      // Step 6: Call VROOM optimization with real matrix
-      setStatus('VROOM 路线优化（真实路网矩阵）…','loading');
-      const optRes=await fetch('https://api.openrouteservice.org/optimization',{
-        method:'POST',
-        headers:{'Authorization':ORS,'Content-Type':'application/json'},
-        body:JSON.stringify(orsBody)
-      });
-      if(!optRes.ok){const t=await optRes.text();throw new Error('优化失败: '+t.slice(0,150));}
-      const optData=await optRes.json();
-
-      const steps=optData.routes[0].steps.filter(s=>s.type==='pickup'||s.type==='delivery'||s.type==='job');
-      orderedItems=steps.map(st=>idToItem[st.id]).filter(Boolean);
-
-      if(!orderedItems.length)throw new Error('路线优化返回空结果');
-
-      // Show cost info
-      const totalDur=optData.routes[0].summary?.duration||0;
+      orderedItems=orderIdx.map(i=>active[i]);
       document.getElementById('sim-info').innerHTML=
-        `真实路网矩阵优化 · 预计行驶 <span>${Math.round(totalDur/60)}</span> 分钟`;
+        `真实路网矩阵排序 · ${n} 站`;
 
     } else {
       orderedItems=active;
       document.getElementById('sim-info').innerHTML='';
     }
 
-    // Step 7: Get final driving stats
+    // Step 5: Get final driving stats for ordered route
     setStatus('计算驾驶距离…','loading');
     const routeCoords=[originC,...orderedItems.map(p=>p._coord),...(homeC?[homeC]:[])];
     let dist='—',time='—';
@@ -493,7 +411,8 @@ async function doRun(){
         headers:{'Authorization':ORS,'Content-Type':'application/json'},
         body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})
       });
-      if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
+      if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;
+        if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
     }catch(e){}
 
     document.getElementById('s-dist').textContent=dist;
@@ -501,12 +420,15 @@ async function doRun(){
     document.getElementById('s-stops').textContent=orderedItems.length;
 
     // Render route
-    const fullItems=[{addr:originStr,type:'ORIGIN',job:null},...orderedItems,...(fixHome?[{addr:homeStr,type:'HOME',job:null}]:[])];
+    const fullItems=[{addr:originStr,type:'ORIGIN',job:null},
+      ...orderedItems,...(fixHome?[{addr:homeStr,type:'HOME',job:null}]:[])];
     document.getElementById('route-out').innerHTML=fullItems.map((p,i)=>{
       const isEdge=i===0||i===fullItems.length-1;
       const num=i===0?'&#9733;':i===fullItems.length-1?'&#8962;':i;
-      const tc=p.type==='PICKUP'?'pickup':p.type==='DELIVER'?'deliver':p.type==='DELIVER_ONLY'?'deliver_only':'';
-      const label=p.type==='PICKUP'?'取件':p.type==='DELIVER'?'送件':p.type==='DELIVER_ONLY'?'送件(车上)':'';
+      const tc=p.type==='PICKUP'?'pickup':p.type==='DELIVER'?'deliver':
+               p.type==='DELIVER_ONLY'?'deliver_only':'';
+      const label=p.type==='PICKUP'?'取件':p.type==='DELIVER'?'送件':
+                  p.type==='DELIVER_ONLY'?'送件(车上)':'';
       const jobStr=p.job?` #${p.job}`:'';
       return `<div class="r-item">
         <div class="r-num ${isEdge?'sp':''}">${num}</div>
@@ -528,7 +450,8 @@ async function doRun(){
       const url='https://www.google.com/maps/dir/'+seg.map(a=>encodeURIComponent(a)).join('/');
       const sn=Math.floor(i/CHUNK)+1;
       const div=document.createElement('div');div.className='maps-seg';
-      div.innerHTML=`<div class="maps-lbl">${totalSegs>1?'段 '+sn+'/'+totalSegs:'完整路线'} · ${seg.length} 站</div><a href="${url}" target="_blank" class="maps-a">&#9654; 打开 Google Maps</a>`;
+      div.innerHTML=`<div class="maps-lbl">${totalSegs>1?'段 '+sn+'/'+totalSegs:'完整路线'} · ${seg.length} 站</div>
+        <a href="${url}" target="_blank" class="maps-a">&#9654; 打开 Google Maps</a>`;
       mapsEl.appendChild(div);
     }
 
