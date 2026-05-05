@@ -369,21 +369,36 @@ async function doRun(){
         }
       });
 
-      // Step 4: Greedy nearest-neighbor with real matrix + pickup constraint
-      // Matrix indices: 0=origin, 1..n=stops, last=home
+      // Step 4a: Greedy nearest-neighbor with real matrix + pickup constraint
       const n=active.length;
+      const homeMatIdx=fixHome?allLocs.length-1:0;
+
+      function routeCost(order){
+        let path=[0,...order.map(i=>i+1),...(fixHome?[homeMatIdx]:[])];
+        let t=0;
+        for(let k=0;k<path.length-1;k++) t+=durMatrix[path[k]][path[k+1]];
+        return t;
+      }
+
+      function constraintOk(order){
+        const seen=new Set();
+        for(const i of order){
+          if(requiresPickup[i]!==undefined&&!seen.has(requiresPickup[i])) return false;
+          seen.add(i);
+        }
+        return true;
+      }
+
       const visited=new Array(n).fill(false);
       const orderIdx=[];
-      let curMatIdx=0; // start at origin (index 0 in matrix)
+      let curMatIdx=0;
 
       for(let step=0;step<n;step++){
         let best=-1,bestDur=Infinity;
         for(let i=0;i<n;i++){
           if(visited[i]) continue;
-          // Enforce pickup-before-delivery constraint
           if(requiresPickup[i]!==undefined&&!visited[requiresPickup[i]]) continue;
-          const matIdx=i+1; // stop i is at matrix index i+1
-          const d=durMatrix[curMatIdx][matIdx];
+          const d=durMatrix[curMatIdx][i+1];
           if(d<bestDur){bestDur=d;best=i;}
         }
         if(best<0) break;
@@ -392,9 +407,34 @@ async function doRun(){
         curMatIdx=best+1;
       }
 
+      // Step 4b: 2-opt improvement - fix backtracking
+      // Try reversing all sub-segments, keep if total cost improves
+      let improved=true;
+      let iters=0;
+      while(improved&&iters<50){
+        improved=false;
+        iters++;
+        for(let i=0;i<orderIdx.length-1;i++){
+          for(let j=i+2;j<orderIdx.length;j++){
+            // Reverse segment [i+1..j]
+            const newOrder=[
+              ...orderIdx.slice(0,i+1),
+              ...orderIdx.slice(i+1,j+1).reverse(),
+              ...orderIdx.slice(j+1)
+            ];
+            if(!constraintOk(newOrder)) continue;
+            if(routeCost(newOrder)<routeCost(orderIdx)-0.1){
+              orderIdx.splice(0,orderIdx.length,...newOrder);
+              improved=true;
+            }
+          }
+        }
+      }
+
       orderedItems=orderIdx.map(i=>active[i]);
+      const finalCost=Math.round(routeCost(orderIdx)/60);
       document.getElementById('sim-info').innerHTML=
-        `真实路网矩阵排序 · ${n} 站`;
+        `真实路网矩阵 + 2-opt优化 · 预计 <span>${finalCost}</span> 分钟`;
 
     } else {
       orderedItems=active;
