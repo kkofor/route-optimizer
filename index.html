@@ -418,7 +418,7 @@ async function doRun(){
         capacity:[cap]
       };
       if(homeIdx!==null) vehicle.end_index=homeIdx;
-      else vehicle.end_index=0; // loop back to origin if no home
+      else vehicle.end_index=0;
 
       const orsBody={
         vehicles:[vehicle],
@@ -426,19 +426,33 @@ async function doRun(){
           'driving-car':{
             durations:durMatrix
           }
-        }
+        },
+        // locations array required when using location_index
+        // each entry: [lng, lat]
+        locations: allLocs
       };
 
       if(shipments.length){
         orsBody.shipments=shipments.map(s=>({
           id:s.id,
-          pickup:{id:s.pid,location_index:s.pickupLocIdx,amount:[1]},
-          delivery:{id:s.did,location_index:s.deliverLocIdx,amount:[1]}
+          pickup:{
+            id:s.pid,
+            location:allLocs[s.pickupLocIdx],
+            location_index:s.pickupLocIdx,
+            amount:[1]
+          },
+          delivery:{
+            id:s.did,
+            location:allLocs[s.deliverLocIdx],
+            location_index:s.deliverLocIdx,
+            amount:[1]
+          }
         }));
       }
       if(vroomJobs.length){
         orsBody.jobs=vroomJobs.map(j=>({
           id:j.id,
+          location:allLocs[j.locIdx],
           location_index:j.locIdx,
           amount:[0]
         }));
