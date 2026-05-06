@@ -15,7 +15,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
 h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
 .card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
-.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}.today-toggle{margin-left:auto;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--b);background:var(--bg);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;padding:0;}.today-toggle.pending{border-color:var(--orange);color:var(--orange);}.today-toggle.done{border-color:var(--green);color:var(--green);background:rgba(120,160,120,0.08);}.today-toggle:active{transform:scale(0.92);}.today-job-head{align-items:center;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.btn-mini:disabled{opacity:0.45;cursor:not-allowed;}.btn-mini:disabled:hover{border-color:var(--b);color:var(--muted);}.btn-eod{border-color:var(--orange);color:var(--orange);}.btn-eod:hover:not(:disabled){border-color:var(--orange);color:var(--orange);background:rgba(220,140,40,0.08);}.today-job.frozen .today-job-status{opacity:0.7;}.today-job.frozen::after{content:'已结算';position:absolute;top:6px;right:6px;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}.today-job{position:relative;}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}.today-toggle{margin-left:auto;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--b);background:var(--bg);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;padding:0;}.today-toggle.pending{border-color:var(--orange);color:var(--orange);}.today-toggle.done{border-color:var(--green);color:var(--green);background:rgba(120,160,120,0.08);}.today-toggle:active{transform:scale(0.92);}.today-job-head{align-items:center;}
 textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
 textarea:focus{border-color:var(--green);}
 .hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -88,8 +88,9 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
   <div class="today-bar">
     <div class="card-title" id="today-title" style="margin-bottom:0">今日订单</div>
     <div class="today-actions">
-      <button type="button" class="btn-mini" onclick="clearToday()">清空今日</button>
+      <button type="button" class="btn-mini btn-eod" id="btn-eod" onclick="endOfDay()">下班结算</button>
       <button type="button" class="btn-mini" onclick="exportToday()">导出</button>
+      <button type="button" class="btn-mini" onclick="clearToday()">清空今日</button>
     </div>
   </div>
   <div id="today-list"></div>
@@ -339,6 +340,9 @@ function syncToDB(){
         first_seen: new Date().toISOString(),
         _wasDeliverOnly: !!inc.deliverOnly,
       };
+    } else if(bucket[job].frozen){
+      // 已结算的单不再被自动同步规则改动
+      continue;
     } else {
       // Fill blank fields only
       if(!bucket[job].pickup_addr && inc.pickup) bucket[job].pickup_addr=inc.pickup;
@@ -351,8 +355,10 @@ function syncToDB(){
   }
 
   // Diff: jobs in bucket but not in incoming -> mark fully done
+  // 已结算 (frozen) 的单不动 — 它们已经定型, 后续粘贴不影响
   const incomingSet=new Set(incomingJobs);
   for(const job of Object.keys(bucket)){
+    if(bucket[job].frozen) continue;
     if(!incomingSet.has(job)){
       bucket[job].pickup_status='done';
       bucket[job].deliver_status='done';
@@ -361,6 +367,91 @@ function syncToDB(){
 
   saveDB(db);
   renderToday();
+}
+
+// ─── 下班结算 (End-of-Day) ─────────────────────────────────────
+const EOD_THRESHOLD_HOUR=16;     // 4 pm
+const EOD_THRESHOLD_MIN=30;      // :30
+
+function eodAvailable(){
+  const d=new Date();
+  const minutes=d.getHours()*60+d.getMinutes();
+  return minutes>=(EOD_THRESHOLD_HOUR*60+EOD_THRESHOLD_MIN);
+}
+
+// Pure helper for testability: given a Date, return YYYY-MM-DD of next day in local TZ.
+function nextDayKey(fromDate){
+  const d=new Date(fromDate);
+  d.setDate(d.getDate()+1);
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+
+function isJobDone(r){
+  return r&&r.pickup_status==='done'&&r.deliver_status==='done';
+}
+
+function endOfDay(){
+  if(!eodAvailable()){
+    alert('下午 16:30 后才能下班结算');
+    return;
+  }
+  const db=loadDB();
+  const tk=todayKey();
+  const bucket=db[tk]||{};
+  const jobs=Object.entries(bucket);
+  if(jobs.length===0){
+    alert('今日无订单');
+    return;
+  }
+  // Filter unfrozen jobs only — already-frozen ones don't get re-processed
+  const fresh=jobs.filter(([,r])=>!r.frozen);
+  if(fresh.length===0){
+    alert('今日订单已全部结算');
+    return;
+  }
+  const doneList=fresh.filter(([,r])=>isJobDone(r));
+  const pendingList=fresh.filter(([,r])=>!isJobDone(r));
+  const tomorrow=nextDayKey(new Date());
+
+  const msg=`确认下班结算?\n\n  已完成 ${doneList.length} 单 → 冻结\n  未完成 ${pendingList.length} 单 → 过继到 ${tomorrow}`;
+  if(!confirm(msg)) return;
+
+  // Freeze all done jobs (incl. those already done)
+  for(const [job,r] of doneList){
+    r.frozen=true;
+    r.frozen_at=new Date().toISOString();
+  }
+
+  // Carry over pendings to next day, mark today's copy as done+frozen+carried
+  if(pendingList.length>0){
+    if(!db[tomorrow]) db[tomorrow]={};
+    for(const [job,r] of pendingList){
+      // Copy to tomorrow (do not overwrite if user already added one there manually)
+      if(!db[tomorrow][job]){
+        db[tomorrow][job]={
+          pickup_addr: r.pickup_addr||'',
+          deliver_addr: r.deliver_addr||'',
+          pickup_status: r._wasDeliverOnly?'done':'pending',
+          deliver_status: 'pending',
+          first_seen: new Date().toISOString(),
+          _wasDeliverOnly: !!r._wasDeliverOnly,
+          carried_from: tk,
+        };
+      }
+      // Today's copy: close it
+      r.pickup_status='done';
+      r.deliver_status='done';
+      r.frozen=true;
+      r.frozen_at=new Date().toISOString();
+      r.carried_to=tomorrow;
+    }
+  }
+  saveDB(db);
+  renderToday();
+  alert(`✓ 已结算\n  完成 ${doneList.length} 单 (冻结)\n  过继 ${pendingList.length} 单 → ${tomorrow}`);
 }
 
 function toggleJob(jobId){
@@ -374,6 +465,8 @@ function toggleJob(jobId){
     // 标回进行中: deliver -> pending. 若是 DELIVER_ONLY 则 pickup 保持 done
     r.deliver_status='pending';
     if(!r._wasDeliverOnly) r.pickup_status='pending';
+    // 解锁: 用户手动撤销已完成时, 自动撤销结算冻结(逃生口)
+    r.frozen=false;
   } else {
     r.pickup_status='done';
     r.deliver_status='done';
@@ -405,6 +498,15 @@ function renderToday(){
   const warn=_storageMode==='memory'?'  ⚠ 浏览器拒绝持久化, 关闭页面后丢失':'';
   title.textContent=`今日订单 (${doneCount}/${jobs.length} 完成)${warn}`;
 
+  // Update EOD button availability
+  const eodBtn=document.getElementById('btn-eod');
+  if(eodBtn){
+    const ok=eodAvailable();
+    const allFrozen=jobs.every(([,r])=>r.frozen);
+    eodBtn.disabled=!ok||allFrozen;
+    eodBtn.title=ok?(allFrozen?'今日已结算':'下班结算'):'下午 16:30 后可用';
+    eodBtn.textContent=allFrozen?'已结算':'下班结算';
+  }
   list.innerHTML=jobs.map(([job,r])=>{
     const done=isDone(r);
     const status=done?'完成':'进行中';
@@ -412,10 +514,12 @@ function renderToday(){
     const pickup=r.pickup_addr?`<b>取</b>: ${r.pickup_addr}`:'';
     const deliver=r.deliver_addr?`<b>送</b>: ${r.deliver_addr}`:'';
     const sep=pickup&&deliver?'<br>':'';
-    return `<div class="today-job ${done?'done':''}">
+    const frozen=r.frozen?' frozen':'';
+    const carried=r.carried_to?`<span style="font-size:9px;color:var(--muted);margin-left:6px">→ ${r.carried_to}</span>`:'';
+    return `<div class="today-job ${done?'done':''}${frozen}">
       <div class="today-job-head">
         <span class="today-job-id">#${job}</span>
-        <span class="today-job-status ${cls}">${status}</span>
+        <span class="today-job-status ${cls}">${status}</span>${carried}
         <button type="button" class="today-toggle ${cls}" onclick="toggleJob('${job}')" aria-label="切换状态">${done?'✓':'○'}</button>
       </div>
       <div class="today-job-addr">${pickup}${sep}${deliver}</div>
