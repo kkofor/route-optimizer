@@ -567,6 +567,77 @@ function isJobDone(r){
   return r&&r.pickup_status==='done'&&r.deliver_status==='done';
 }
 
+// 自动结算阈值 (24h, local). 之后没手动结算就被动 / 主动补.
+const AUTO_EOD_HOUR=19;
+
+// Compute next-day key from a YYYY-MM-DD string (no Date involved beyond parsing).
+function nextDayFromKey(dateKey){
+  const [y,m,d]=dateKey.split('-').map(Number);
+  // Use local date — month is 0-indexed in Date constructor.
+  const dt=new Date(y, m-1, d);
+  dt.setDate(dt.getDate()+1);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+// Core EOD logic. Operates on a specific date bucket. Pure data manipulation —
+// no UI, no alert, no confirm. Returns {processed, done, pending, tomorrow} or null if nothing to do.
+function runEodFor(db, dateKey){
+  const bucket=db[dateKey];
+  if(!bucket) return null;
+  const jobs=Object.entries(bucket).filter(([k])=>!k.startsWith('_'));
+  if(jobs.length===0) return null;
+  const fresh=jobs.filter(([,r])=>!r.frozen);
+  if(fresh.length===0) return null;
+
+  const doneList=fresh.filter(([,r])=>isJobDone(r));
+  const pendingList=fresh.filter(([,r])=>!isJobDone(r));
+  const tomorrow=nextDayFromKey(dateKey);
+  const nowIso=new Date().toISOString();
+
+  for(const [,r] of doneList){
+    r.frozen=true;
+    r.frozen_at=nowIso;
+  }
+
+  if(pendingList.length>0){
+    if(!db[tomorrow]) db[tomorrow]={};
+    for(const [job,r] of pendingList){
+      if(!db[tomorrow][job]){
+        db[tomorrow][job]={
+          pickup_addr: r.pickup_addr||'',
+          deliver_addr: r.deliver_addr||'',
+          pickup_status: r._wasDeliverOnly?'done':'pending',
+          deliver_status: 'pending',
+          first_seen: nowIso,
+          _wasDeliverOnly: !!r._wasDeliverOnly,
+          carried_from: dateKey,
+        };
+      } else {
+        // 修复发现5: 若明天桶已存在该 job (用户提前粘贴或自动同步带入),
+        // 用 fresh 的字段补缺(永不覆盖). 让两端最终保持地址完整.
+        const tr=db[tomorrow][job];
+        if(!tr.pickup_addr && r.pickup_addr) tr.pickup_addr=r.pickup_addr;
+        if(!tr.deliver_addr && r.deliver_addr) tr.deliver_addr=r.deliver_addr;
+        if(r._wasDeliverOnly) tr._wasDeliverOnly=true;
+        if(!tr.carried_from) tr.carried_from=dateKey;
+      }
+      // Today's copy: close it
+      r.pickup_status='done';
+      r.deliver_status='done';
+      r.frozen=true;
+      r.frozen_at=nowIso;
+      r.carried_to=tomorrow;
+    }
+  }
+  return {
+    processed: fresh.length,
+    done: doneList.length,
+    pending: pendingList.length,
+    tomorrow,
+  };
+}
+
+// 用户手动点 "下班结算" 按钮.
 function endOfDay(){
   if(!eodAvailable()){
     alert('下午 16:30 后才能下班结算');
@@ -580,7 +651,6 @@ function endOfDay(){
     alert('今日无订单');
     return;
   }
-  // Filter unfrozen jobs only — already-frozen ones don't get re-processed
   const fresh=jobs.filter(([,r])=>!r.frozen);
   if(fresh.length===0){
     alert('今日订单已全部结算');
@@ -588,46 +658,70 @@ function endOfDay(){
   }
   const doneList=fresh.filter(([,r])=>isJobDone(r));
   const pendingList=fresh.filter(([,r])=>!isJobDone(r));
-  const tomorrow=nextDayKey(new Date());
+  const tomorrow=nextDayFromKey(tk);
 
   const msg=`确认下班结算?\n\n  已完成 ${doneList.length} 单 → 冻结\n  未完成 ${pendingList.length} 单 → 过继到 ${tomorrow}`;
   if(!confirm(msg)) return;
 
-  // Freeze all done jobs (incl. those already done)
-  for(const [job,r] of doneList){
-    r.frozen=true;
-    r.frozen_at=new Date().toISOString();
-  }
-
-  // Carry over pendings to next day, mark today's copy as done+frozen+carried
-  if(pendingList.length>0){
-    if(!db[tomorrow]) db[tomorrow]={};
-    for(const [job,r] of pendingList){
-      // Copy to tomorrow (do not overwrite if user already added one there manually)
-      if(!db[tomorrow][job]){
-        db[tomorrow][job]={
-          pickup_addr: r.pickup_addr||'',
-          deliver_addr: r.deliver_addr||'',
-          pickup_status: r._wasDeliverOnly?'done':'pending',
-          deliver_status: 'pending',
-          first_seen: new Date().toISOString(),
-          _wasDeliverOnly: !!r._wasDeliverOnly,
-          carried_from: tk,
-        };
-      }
-      // Today's copy: close it
-      r.pickup_status='done';
-      r.deliver_status='done';
-      r.frozen=true;
-      r.frozen_at=new Date().toISOString();
-      r.carried_to=tomorrow;
-    }
-  }
+  const result=runEodFor(db, tk);
+  if(!result) return;
   saveDB(db);
   renderToday();
-  // 自动弹今日汇总(替代纯文本 alert,信息更全)
   showSummary();
 }
+
+// ─── 自动结算兜底 ──────────────────────────────────────────
+// Helper: should an auto-sweep run for `dateKey` at the given `now`?
+// Yes if: dateKey is a past date (any time today is allowed since we missed yesterday's window),
+// OR dateKey == today AND now >= AUTO_EOD_HOUR:00.
+function shouldAutoEod(dateKey, now){
+  const todayK=todayKey();
+  if(dateKey<todayK) return true;     // 过去的日期 — 永远应当结算
+  if(dateKey>todayK) return false;    // 未来的日期 — 不可能, 安全跳过
+  // 同一天: 看小时
+  return now.getHours()>=AUTO_EOD_HOUR;
+}
+
+// 扫所有 DB 桶, 对任何"应该已结算但还没"的桶执行 runEodFor.
+// 返回处理过的桶数. 静默执行, 不弹窗.
+// 链式: 每轮循环后都重扫 keys (因为 carry-over 会创建新桶),
+// 直到一轮无新增结算才停止. 最多 30 轮防止意外死循环.
+function autoSweepEod(){
+  const db=loadDB();
+  const now=new Date();
+  let totalTouched=0;
+  for(let pass=0; pass<30; pass++){
+    let passTouched=0;
+    const dateKeys=Object.keys(db).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+    for(const dk of dateKeys){
+      if(!shouldAutoEod(dk, now)) continue;
+      const result=runEodFor(db, dk);
+      if(result) passTouched++;
+    }
+    if(passTouched===0) break;
+    totalTouched+=passTouched;
+  }
+  if(totalTouched>0){
+    saveDB(db);
+    renderToday();
+  }
+  return totalTouched;
+}
+
+// 前台定时器: 每 5 分钟检查一次是否到 AUTO_EOD_HOUR.
+// 5 分钟粒度对工作场景足够 (用户不会精确到秒).
+let _eodTimer=null;
+function scheduleEodCheck(){
+  if(_eodTimer) return;  // 已经在跑, 不重复设
+  _eodTimer=setInterval(()=>{
+    autoSweepEod();
+  }, 5*60*1000);
+}
+
+// 用户切回页面 / 解锁 / 来回切 tab 时也立刻扫一次.
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden) autoSweepEod();
+});
 
 function toggleJob(jobId){
   const db=loadDB();
@@ -752,6 +846,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   // Prune old + render today's saved bucket
   const db=loadDB();
   if(pruneDB(db)>0) saveDB(db);
+  // 兜底: 任何被遗忘的 EOD 现在补上 (静默)
+  autoSweepEod();
+  // 前台定时器, 在线一直挂着
+  scheduleEodCheck();
   renderToday();
 });
 
