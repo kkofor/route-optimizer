@@ -144,27 +144,150 @@ HOME|家庭地址（可选）
 
 ## index.html 代码现状（2026-05-06）
 
-- **当前 sha**: `2feccb71242415c4c4410ae337d14db123c4ecc2`（V3 + 相邻地址去重）
-- **最新 commits**:
-  - [`5ed8cded`](https://github.com/kkofor/route-optimizer/commit/5ed8cdedf6948d9d955b6e355585b2473e45566b) — 相邻地址去重 + CHUNK 恢复 9（实战验证通过）
-  - [`d3fa87e9`](https://github.com/kkofor/route-optimizer/commit/d3fa87e9bc6acdfceb5b805720b36e4e6f5b8ee6) — V3 算法 + 初版 chunk fix
+- **当前 sha**: `67b059139a0e766191767aa6eb16b2f0e41cfe7b`
+- **最新 commit**: [`a26d2ab4`](https://github.com/kkofor/route-optimizer/commit/a26d2ab4dff4a991c402c711e76656cec9baf9fa)
 - **原版 sha（参考）**: `6bfa3434de71a5ae7523a1213e42f65d210fc2ab`
-- **字符数**: 22807 → 26209（+3402 chars）
-- **改动**:
-  - 算法 V3（多起点贪心 + or-opt VND）
-  - Google Maps URL 生成：相邻同地址自动合并为 1 个 stop（修同栋楼多单 "无法计算路线" bug）
-  - `CHUNK = 9`（贴 Google Maps iOS 官方上限：1 起点 + 9 后续 = 10 总点）
-  - UI 文案：`真实路网矩阵 + 2-opt优化` → `多起点贪心 + 2-opt + or-opt`
-- **离线测试**：n=12×200 次 0/200 回归；n=8 vs 穷举最优 3/3 命中；n=25 stress ≤175ms
+- **字符数**: 22807 → 52844（+30037 chars）
+- **行数**: 1157
 
-### Google Maps 链接生成规则（重要）
+### 本日 commit 链路（按时间顺序）
 
-- **官方上限**：iOS 端总点数最多 10（含起点和终点）
-- **常见误判**：当年看到"超 8 卡"实为同栋楼连续重复地址触发 "无法计算路线"，与点数无关
-- **去重**：相邻同地址（trim + 折叠空白 + lowercase 比较）合并为 1 个 stop
-- **路线列表（route-out）和 stop 计数器（s-stops）保留全部原始单**——不会漏单
+| Commit | 内容 |
+|---|---|
+| [`d3fa87e9`](https://github.com/kkofor/route-optimizer/commit/d3fa87e9bc6acdfceb5b805720b36e4e6f5b8ee6) | V3 算法（多起点贪心 + or-opt VND）+ 初版 chunk fix |
+| [`5ed8cded`](https://github.com/kkofor/route-optimizer/commit/5ed8cdedf6948d9d955b6e355585b2473e45566b) | 相邻地址去重 + CHUNK 恢复 9（修同楼多单"无法计算路线"） |
+| [`f90b589f`](https://github.com/kkofor/route-optimizer/commit/f90b589fa2e5e0e64a8d86b4e7afcaa3662847ec) | 一键粘贴按钮 |
+| [`587876de`](https://github.com/kkofor/route-optimizer/commit/587876de196c450e4ff98c9714d492ef4cba8a5a) | 今日订单数据库（粘贴自动入库 + 差异同步） |
+| [`9f305227`](https://github.com/kkofor/route-optimizer/commit/9f305227d9136b3ff380447b2b5cf5ced484d128) | 修复 today-card 渲染崩溃 + localStorage 内存兜底 |
+| [`5a70f756`](https://github.com/kkofor/route-optimizer/commit/5a70f7566876d8fe9b919850595e1a6cafec6215) | 每单手动切换按钮 |
+| [`d6797ea6`](https://github.com/kkofor/route-optimizer/commit/d6797ea6634fddb1bcd00935215634ade4116d41) | 下班结算 + 自动过继未完成单到次日 |
+| [`ff0b2197`](https://github.com/kkofor/route-optimizer/commit/ff0b2197d9136b3ff380447b2b5cf5ced484d128) | 今日汇总 modal（订单数 + 累计公里 + 算路线次数） |
+| [`27dac26c`](https://github.com/kkofor/route-optimizer/commit/27dac26c24c670cbaa794e26a06f68865a25239f) | EOD 后自动弹今日汇总 |
+| [`9a8ab380`](https://github.com/kkofor/route-optimizer/commit/9a8ab38075520ad1c7ec5275bd21818265be486b) | today-job 切换改为滑动开关（统一 UI） |
+| [`f0361b6c`](https://github.com/kkofor/route-optimizer/commit/f0361b6c6068d7dd30db3fa4680a40620301c068) | 油费成本估算（油耗 + 油价 + 老化提示） |
+| [`a26d2ab4`](https://github.com/kkofor/route-optimizer/commit/a26d2ab4dff4a991c402c711e76656cec9baf9fa) | 自动 EOD 兜底（19:00 后页面打开/前台定时器自动结算） |
 
 ---
+
+## 当前功能模块清单
+
+### 1. 路线优化算法（V3）
+- 多起点贪心：seed=-1 (free origin NN) + K 个最近无 pickup 依赖站
+- VND 局部搜索：2-opt + or-opt 交替直到收敛
+- IMPROVE_EPS=0.1
+- 离线测试：n=12×200 次 0/200 回归；n=8 vs 穷举最优 3/3 命中
+- UI 文案：`多起点贪心 + 2-opt + or-opt`
+
+### 2. Google Maps 链接生成
+- `CHUNK = 9`（每段总地址 ≤ 10，贴 iOS 官方上限）
+- 相邻同地址自动合并为 1 stop（修同楼多单触发"无法计算路线"）
+- 大小写 + 空格归一化匹配
+- 显示"合并 N 个相同地址"提示
+
+### 3. 一键粘贴
+- 输入框上方按钮，调 `navigator.clipboard.readText()`
+- 覆盖式（不追加）
+- iOS Safari 首次会弹权限对话框
+- 兜底：浏览器不支持 / 拒绝授权 时提示"长按粘贴"
+
+### 4. 今日订单数据库
+- localStorage key `route_optimizer_db`
+- 按本地日期分桶，每桶下面是 job 字典
+- 字段：`pickup_addr / deliver_addr / pickup_status / deliver_status / first_seen / _wasDeliverOnly / frozen / frozen_at / carried_to / carried_from`
+- 30 天前的桶启动时自动清理
+- localStorage 失败时降级到内存（`_storageMode='memory'`，UI 显示警告）
+
+### 5. 自动差异同步
+- 粘贴后 800ms debounce → doParse + syncToDB
+- 数据库有 + 新批次没 → 自动标 done
+- 数据库有 + 新批次有 → 重置为 pending（Spoke 重激活语义）
+- 数据库没 + 新批次有 → 新增 pending
+- 已 frozen 的单不被改动（结算后定型）
+- 空粘贴防护：incoming=0 时 no-op，不误标 done
+
+### 6. 手动切换（滑动开关）
+- 每张 today-job 卡片的右侧
+- 复用页面顶部的 `.toggle / .knob` CSS（与解析列表一致）
+- 切换 done ↔ pending 时,DELIVER_ONLY 的 pickup 永远保持 done（车上语义）
+- 撤销已完成时自动清除 frozen 标记（逃生口）
+
+### 7. 下班结算（手动 + 自动）
+- **手动**：`下班结算` 按钮，16:30 后才可点
+- **自动 19:00 兜底**：`AUTO_EOD_HOUR = 19`
+  - 页面加载时 `autoSweepEod()` 扫所有过期桶（被动，最可靠）
+  - 页面前台时每 5 分钟检查（主动）
+  - `visibilitychange` 触发立即重检查（切回 tab/解锁屏幕）
+- **链式补结算**：周末两天没开页面 → 周一打开 → 自动 day-2→day-1→today carry 链
+- 已完成单：`frozen=true`
+- 未完成单：复制到次日桶（保留 _wasDeliverOnly 语义）+ 今日 frozen+carried_to
+- 静默执行（无 alert / confirm）
+
+### 8. 今日汇总 modal
+- 订单总数 / 已完成 / 未完成 / 过继到次日 / 从昨日过继来
+- 算路线次数 / 累计距离 / 累计驾驶时间
+- 预计油费 + 计算公式
+- 各次路线明细
+- 重叠提示（≥2 次路线时）
+- 触发：手动按钮 + EOD 后自动弹
+
+### 9. 油费成本
+- 设置卡片新增 `油耗 (L/100km)` + `油价 ($/L)`
+- 油耗默认 6.4（2025 Honda CR-V Hybrid AWD NRCan 综合值）
+- 油价手输（无可靠免费 API；快捷链接 GasBuddy Winnipeg）
+- localStorage 持久化（key `route_optimizer_fuel`）
+- 老化提醒：`FUEL_STALE_DAYS = 2` 天未更新 → 显示 ⚠ 横幅
+- 公式：km × rate / 100 × price
+
+---
+
+## 数据存储现状（重要）
+
+**当前**：所有数据 100% 在用户 iPhone Safari 的 localStorage，**无任何服务器端**。
+
+**已知风险**：
+- Safari "清除历史和网站数据" → **数据全丢**
+- iOS 7 天不访问该站 → 可能自动清理（`_storageMode='memory'` 兜底也只是当次会话）
+- 换设备 / 重置手机 → 数据全丢
+
+**讨论过的备份方案（用户决定晚点弄）**：
+
+| 方案 | 数据存哪 | 体验 | 复杂度 | 月费 |
+|---|---|---|---|---|
+| **A+: 导出按钮 + 19:00 自动复制到剪贴板** | 用户备忘录 | 手动粘 | 🟢 50 行 | $0 |
+| **B2: GitHub 私有仓库当数据库** | 仓库 JSON | 同现在 | 🟡 150 行 + token 暴露风险 | $0 |
+| **C: Supabase 云数据库** | Supabase | 同现在 + 多设备同步 | 🟡 200 行 | $0（免费层） |
+
+用户是 GitHub Pro,所以 B2 私有 Pages 技术上可行,但每次访问要登录 GitHub,体验差。
+**用户当前选择**：暂不做,以后再说。
+
+---
+
+## 关键常量表（需调时改这里）
+
+| 常量 | 值 | 作用 |
+|---|---|---|
+| `IMPROVE_EPS` | 0.1 | 2-opt / or-opt 接受改进的最小阈值（秒） |
+| `K` | min(eligibleFirst, max(3, min(n, 6))) | 多起点 seed 数 |
+| `CHUNK` | 9 | Google Maps 每段最多 stop 数 - 1 |
+| `DB_KEY` | 'route_optimizer_db' | 主数据库 localStorage key |
+| `DB_RETAIN_DAYS` | 30 | 自动清理早于此值的桶 |
+| `FUEL_KEY` | 'route_optimizer_fuel' | 油费设置 key |
+| `FUEL_DEFAULT_RATE` | 6.4 | 默认油耗 L/100km |
+| `FUEL_STALE_DAYS` | 2 | 油价老化天数 |
+| `EOD_THRESHOLD_HOUR` / `EOD_THRESHOLD_MIN` | 16 / 30 | 手动 EOD 启用阈值 |
+| `AUTO_EOD_HOUR` | 19 | 自动 EOD 触发阈值 |
+
+---
+
+## 完整审计结论（2026-05-06）
+
+✓ 括号全平衡（{} 293, () 740, [] 196）  
+✓ 24 个 HTML id 全部 1:1 对应 JS getElementById  
+✓ 32 个全局函数无重复定义  
+✓ 5 处 `Object.entries(bucket)` 全部过滤 `_*` keys  
+✓ 端到端 jsdom 测试 7 个场景全过（手动 EOD / 自动 sweep / 链式补结算 / 重复粘贴 / 边界）  
+⚠ Mapbox / ORS token 客户端暴露 — 应在两个 dashboard 设 URL 白名单（不动代码）
+
 
 ## 本 session 未完成的事项（已推迟）
 
@@ -270,12 +393,21 @@ HOME|家庭地址（可选）
 
 ## 讨论中的未来方向
 
-1. **MapLibre GL 地图可视化** — 在页面内显示路线图，不跳转 Google Maps
-2. **Android Accessibility Service** — 自动抓取 Spoke app 订单，不需要截图
-3. **圆心南移策略** — 路线末尾优先南边站点，影响派单系统给更多南区单
-4. **Ruin-and-Recreate** — 参考 PyVRP/jsprit，新单加入时重新优化而不是简单插入
-5. **时间窗 / LATE 单权重** — 目标函数加入截止时间约束
+### 短期（用户暂缓但有共识）
+1. **数据持久化备份** — 见上文"数据存储现状"。推荐 A+（导出按钮 + 19:00 自动复制剪贴板），用户决定晚点弄
+2. **PWA 化** — 加 manifest.webmanifest + service worker → 主屏图标 + 离线访问。1-2 小时实现
+3. **客户备注字段** — 解析行扩展为 `DELIVER|job|地址|备注`，DB 加 notes 字段（30 分钟）
+4. **包裹位置标记** — Spoke 招牌功能,冬天找货用
+
+### 长期（无明确时间表）
+5. **MapLibre GL 地图可视化** — 在页面内显示路线图，不跳转 Google Maps
+6. **Android Accessibility Service** — 自动抓取 Spoke app 订单，不需要截图
+7. **圆心南移策略** — 路线末尾优先南边站点，影响派单系统给更多南区单
+8. **Ruin-and-Recreate** — 参考 PyVRP/jsprit，新单加入时重新优化而不是简单插入
+9. **时间窗 / LATE 单权重** — 目标函数加入截止时间约束
+10. **算法 Tabu 扰动** — 当前 VND 收敛后没逃逸机制；ILS（iterated local search）做 4-opt 双桥扰动后再 VND
+11. **周/月汇总** — 跨日累加里程/油费
 
 ---
 
-更新时间: 2026-05-06（V3 + 相邻地址去重已部署，commit 5ed8cded）
+更新时间: 2026-05-06（一日内完成 12 个 commit；当前最新 commit a26d2ab4 自动 EOD 兜底）
