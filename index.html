@@ -15,7 +15,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
 h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
 .card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
-.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}.today-toggle{margin-left:auto;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--b);background:var(--bg);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;padding:0;}.today-toggle.pending{border-color:var(--orange);color:var(--orange);}.today-toggle.done{border-color:var(--green);color:var(--green);background:rgba(120,160,120,0.08);}.today-toggle:active{transform:scale(0.92);}.today-job-head{align-items:center;}
 textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
 textarea:focus{border-color:var(--green);}
 .hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -337,13 +337,16 @@ function syncToDB(){
         pickup_status: inc.deliverOnly?'done':'pending',
         deliver_status: 'pending',
         first_seen: new Date().toISOString(),
+        _wasDeliverOnly: !!inc.deliverOnly,
       };
     } else {
       // Fill blank fields only
       if(!bucket[job].pickup_addr && inc.pickup) bucket[job].pickup_addr=inc.pickup;
       if(!bucket[job].deliver_addr && inc.deliver) bucket[job].deliver_addr=inc.deliver;
-      // If discovered as DELIVER_ONLY this round, ensure pickup_status=done
-      if(inc.deliverOnly && bucket[job].pickup_status==='pending') bucket[job].pickup_status='done';
+      // 重新出现 -> 强制 pending (Spoke 重激活语义)
+      bucket[job].pickup_status = inc.deliverOnly ? 'done' : 'pending';
+      bucket[job].deliver_status='pending';
+      if(inc.deliverOnly) bucket[job]._wasDeliverOnly=true;
     }
   }
 
@@ -356,6 +359,25 @@ function syncToDB(){
     }
   }
 
+  saveDB(db);
+  renderToday();
+}
+
+function toggleJob(jobId){
+  const db=loadDB();
+  const k=todayKey();
+  const bucket=db[k];
+  if(!bucket||!bucket[jobId]) return;
+  const r=bucket[jobId];
+  const wasDone=r.pickup_status==='done' && r.deliver_status==='done';
+  if(wasDone){
+    // 标回进行中: deliver -> pending. 若是 DELIVER_ONLY 则 pickup 保持 done
+    r.deliver_status='pending';
+    if(!r._wasDeliverOnly) r.pickup_status='pending';
+  } else {
+    r.pickup_status='done';
+    r.deliver_status='done';
+  }
   saveDB(db);
   renderToday();
 }
@@ -394,6 +416,7 @@ function renderToday(){
       <div class="today-job-head">
         <span class="today-job-id">#${job}</span>
         <span class="today-job-status ${cls}">${status}</span>
+        <button type="button" class="today-toggle ${cls}" onclick="toggleJob('${job}')" aria-label="切换状态">${done?'✓':'○'}</button>
       </div>
       <div class="today-job-addr">${pickup}${sep}${deliver}</div>
     </div>`;
