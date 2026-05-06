@@ -84,7 +84,7 @@ HOME|家庭地址（可选）
 4. VND 局部搜索      → 2-opt + or-opt 交替，直到两者都无法改善
 5. 取最优            → 所有种子的最终解取 cost 最小者
 6. ORS Directions    → 计算最终路线总距离和时间
-7. Google Maps 链接  → 分段导航（每段≤9个途经点）
+7. Google Maps 链接  → 分段导航（每段≤8个总地址点，CHUNK=7）
 ```
 
 ### 算法细节（V3）
@@ -142,39 +142,17 @@ HOME|家庭地址（可选）
 
 ---
 
-## index.html 代码现状（2026-05-06 本 session 结束时）
+## index.html 代码现状（2026-05-06）
 
-- **GitHub sha（原版，未提交）**: `6bfa3434de71a5ae7523a1213e42f65d210fc2ab`
-- **V3 patch 状态**: **沙箱中完成，尚未 push 到 GitHub**
-- **字符数变化**: 22807 → 25736（+2929 chars）
-- **改动行**: L375–508（算法块）+ L512（UI 文案）
-- **其余代码**: 完全未动
-
-### 提交时需要做的事（下次 session）
-
-```python
-# 1. 从 GitHub 拉原文件（sha 6bfa3434...）
-# 2. 应用 V3 patch（替换 old_block → new_block，见 transcript）
-# 3. 用 GITHUB_CREATE_OR_UPDATE_FILE_CONTENTS 提交：
-#    owner=kkofor, repo=route-optimizer, path=index.html, branch=main
-#    message="algorithm: multi-start greedy + or-opt VND (V3)"
-#    sha=6bfa3434de71a5ae7523a1213e42f65d210fc2ab
-```
-
-**patch 中的 old_block 起始**（用于精确匹配，出现恰好 1 次）：
-```
-      // Step 4a: Greedy nearest-neighbor with real matrix + pickup constraint
-      const n=active.length;
-      const homeMatIdx=fixHome?allLocs.length-1:0;
-```
-
-**patch 中的 new_block 起始**：
-```
-      // Step 4a: Multi-start greedy + VND local search (2-opt + or-opt).
-      const n=active.length;
-      const homeMatIdx=fixHome?allLocs.length-1:0;
-      const IMPROVE_EPS=0.1;
-```
+- **当前 sha**: `55be4b8c6ebdfa1f37c1cb935645cac61974aebd`（V3 + maps chunk fix）
+- **提交 commit**: [`d3fa87e9`](https://github.com/kkofor/route-optimizer/commit/d3fa87e9bc6acdfceb5b805720b36e4e6f5b8ee6) — 2026-05-06 16:01 UTC
+- **原版 sha（参考）**: `6bfa3434de71a5ae7523a1213e42f65d210fc2ab`
+- **字符数**: 22807 → 25768（+2961 chars）
+- **改动**:
+  - 算法 V3（多起点贪心 + or-opt VND）— L375–514
+  - Google Maps 分段 `CHUNK 9 → 7`（每段总地址 ≤ 8，避免 app 卡死）
+  - UI 文案：`真实路网矩阵 + 2-opt优化` → `多起点贪心 + 2-opt + or-opt`
+- **离线测试**：n=12×200 次 0/200 回归；n=8 vs 穷举最优 3/3 命中；n=25 stress ≤175ms
 
 ---
 
@@ -290,4 +268,4 @@ HOME|家庭地址（可选）
 
 ---
 
-更新时间: 2026-05-06（V3 算法审计完成，待提交）
+更新时间: 2026-05-06（V3 已部署 + Maps chunk 修复，commit d3fa87e9）
