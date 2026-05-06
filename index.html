@@ -542,7 +542,8 @@ function endOfDay(){
   }
   saveDB(db);
   renderToday();
-  alert(`✓ 已结算\n  完成 ${doneList.length} 单 (冻结)\n  过继 ${pendingList.length} 单 → ${tomorrow}`);
+  // 自动弹今日汇总(替代纯文本 alert,信息更全)
+  showSummary();
 }
 
 function toggleJob(jobId){
