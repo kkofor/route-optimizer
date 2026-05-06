@@ -14,6 +14,7 @@
 - **两个工具**:
   - `index.html` — 粘贴地址格式，调用 ORS + 自研算法优化
   - `app.html` — 全功能版，上传截图 → AI 解析 → 路线优化 → 订单管理 → 统计
+- **本次 session 只改了 `index.html`，app.html 未动。**
 
 ---
 
@@ -61,38 +62,129 @@ Model: claude-sonnet-4-5-20251001
 
 ---
 
-## index.html 工作流程
+## 输入格式（index.html 粘贴框）
 
-### 用法
-1. Alex 发截图给 Claude
-2. Claude 解析后输出标准格式（代码块）:
 ```
-ORIGIN|当前位置地址
-PICKUP|Job号|取件地址
-DELIVER|Job号|送件地址
-DELIVER_ONLY|Job号|送件地址（车上已有货）
-HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3
+ORIGIN|地址
+PICKUP|job编号|取件地址
+DELIVER|job编号|送件地址
+DELIVER_ONLY|job编号|送件地址
+HOME|家庭地址（可选）
 ```
-3. Alex 复制粘贴进工具 → 一键优化
 
-### 算法流程 (index.html)
+---
+
+## index.html 算法（当前已提交版本：V3）
+
+### 工作流程
 ```
 1. Mapbox Geocoding  → 所有地址转坐标
 2. ORS Matrix API    → N×N 真实驾驶时间矩阵
-3. 贪心初始解        → nearest-neighbor，遵守取送约束
-4. 2-opt 改善        → 消除路线交叉，最多50次迭代
-5. ORS Directions    → 计算最终路线总距离和时间
-6. Google Maps 链接  → 分段导航（每段≤9个途经点）
+3. 多起点贪心        → 从 K+1 个候选起点各跑一次 NN，每个结果独立跑 VND
+4. VND 局部搜索      → 2-opt + or-opt 交替，直到两者都无法改善
+5. 取最优            → 所有种子的最终解取 cost 最小者
+6. ORS Directions    → 计算最终路线总距离和时间
+7. Google Maps 链接  → 分段导航（每段≤9个途经点）
 ```
 
-### 取送约束
+### 算法细节（V3）
+
+**文件**: `index.html` L375–508
+
+**关键参数**:
+- `IMPROVE_EPS = 0.1`（接受改善阈值：≥0.1秒才算改善，与原版一致）
+- `K = min(eligibleFirst.length, max(3, min(n, 6)))`（种子数上限6）
+- seeds = `[-1]` + K 个离 origin 最近的无 pickup 依赖站点
+
+**函数**:
+- `greedyFrom(firstIdx)` — 从指定起点跑贪心 NN；`firstIdx=-1` 表示从 origin 自由选
+- `twoOpt(order)` — 反转子段，最多50轮
+- `orOpt(order)` — 抽取长度1/2/3的子链，尝试所有插入位置，最多50轮
+- `vnd(order)` — 交替跑 twoOpt + orOpt，直到一轮内两者都无改善（最多10轮）
+- 主循环：对每个 seed 跑 `vnd([...greedyFrom(seed)])` → 取最优
+
+**取送约束**:
 - PICKUP 必须在对应 DELIVER 之前
 - DELIVER_ONLY = 货已在车上，无取件点，当普通 job 处理
-- requiresPickup[deliverIdx] = pickupIdx 映射表
+- `requiresPickup[deliverIdx] = pickupIdx` 映射表
+- `constraintOk(order)` 在每次 2-opt / or-opt 移动前验证
 
-### 已验证
-- 穷举对比：9站时算法结果与穷举最优差距仅 4 秒（0.1分钟）
-- Mapbox geocoding 解决了 ORS 在 Winnipeg 找不到地址的问题
+**UI**: `sim-info` 显示「多起点贪心 + 2-opt + or-opt · 预计 X 分钟」
+
+### 性能基准（合成 Winnipeg 数据）
+
+| 场景 | 新 vs 旧 | N=30 耗时 |
+|---|---|---|
+| N=12，1-2 P+D 对，200次 | 新赢 148/200，旧赢 **0**/200 | — |
+| N=12 平均节省 | **7.89%**（约 15 分钟） | — |
+| 穷举最优对比 N=8 | **97/100** 命中最优，平均差 0.06% | — |
+| N=30 压力测试 | — | **~150ms** |
+
+**关键保证**：V3 对比原算法**零回归**（数学可证：seed=-1 + VND 包含了旧算法的计算路径）。
+
+### 二次审计结果（2026-05-06，本 session）
+
+13 个测试用例，33 个断言，**全部通过**：
+
+| 测试 | 通过 |
+|---|---|
+| n=1 单站 | ✓ |
+| n=2 P+D（有/无 home） | ✓ |
+| 不可能场景（循环依赖）不崩溃 | ✓ |
+| or-opt 不破坏 P+D 顺序 | ✓ |
+| 2-opt 不破坏 P+D 顺序 | ✓ |
+| 全距离相等（tie 处理） | ✓ |
+| fallback 空路由 | ✓ |
+| pickup 站不被当强制首站 | ✓ |
+| n=25 runtime < 1000ms | ✓（~500ms 含矩阵构建，纯算法 ~120ms） |
+| 100次穷举对比 avg <1%，max <10% | ✓ |
+| 200次非回归测试，旧赢次数 = 0 | ✓ |
+
+---
+
+## index.html 代码现状（2026-05-06 本 session 结束时）
+
+- **GitHub sha（原版，未提交）**: `6bfa3434de71a5ae7523a1213e42f65d210fc2ab`
+- **V3 patch 状态**: **沙箱中完成，尚未 push 到 GitHub**
+- **字符数变化**: 22807 → 25736（+2929 chars）
+- **改动行**: L375–508（算法块）+ L512（UI 文案）
+- **其余代码**: 完全未动
+
+### 提交时需要做的事（下次 session）
+
+```python
+# 1. 从 GitHub 拉原文件（sha 6bfa3434...）
+# 2. 应用 V3 patch（替换 old_block → new_block，见 transcript）
+# 3. 用 GITHUB_CREATE_OR_UPDATE_FILE_CONTENTS 提交：
+#    owner=kkofor, repo=route-optimizer, path=index.html, branch=main
+#    message="algorithm: multi-start greedy + or-opt VND (V3)"
+#    sha=6bfa3434de71a5ae7523a1213e42f65d210fc2ab
+```
+
+**patch 中的 old_block 起始**（用于精确匹配，出现恰好 1 次）：
+```
+      // Step 4a: Greedy nearest-neighbor with real matrix + pickup constraint
+      const n=active.length;
+      const homeMatIdx=fixHome?allLocs.length-1:0;
+```
+
+**patch 中的 new_block 起始**：
+```
+      // Step 4a: Multi-start greedy + VND local search (2-opt + or-opt).
+      const n=active.length;
+      const homeMatIdx=fixHome?allLocs.length-1:0;
+      const IMPROVE_EPS=0.1;
+```
+
+---
+
+## 本 session 未完成的事项（已推迟）
+
+1. `backtrackScore` 死代码（L56–77 原版）— 无害，但可删
+2. Geocode 串行 + sleep(300) — 可并行化，理论上省 2–3 秒
+3. ORS Matrix 未缓存
+4. MapLibre GL 地图可视化
+5. 时间窗 / LATE 单权重
 
 ---
 
@@ -138,11 +230,6 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3
 
 ## 已知问题 & 待优化
 
-### 算法层面
-1. **or-opt 未实现** — 2-opt 无法移动单个站点到最优位置，or-opt 可以解决孤立远端单问题
-2. **多起点贪心未实现** — 现在只跑一次贪心，多起点取最优可提升初始解质量
-3. **目标函数单一** — 只优化驾驶时间，未加 LATE 单权重
-
 ### Geocoding
 - ORS geocoder 在 Winnipeg 精度差（"107 Paramount Blvd" 返回市中心假坐标）
 - 已切换到 Mapbox，问题解决
@@ -178,20 +265,10 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3
 | 地图 Geocoding | Mapbox Geocoding API v5 |
 | 路网矩阵 | ORS Matrix API v2 |
 | 路线统计 | ORS Directions API v2 |
-| 路线优化 | 自研 贪心 + 2-opt |
+| 路线优化 | 自研 多起点贪心 + 2-opt + or-opt (VND) |
 | AI 解析 | Anthropic-compatible API (mrafx.ca) |
 | 数据存储 | localStorage |
 | 部署 | GitHub Pages (私有 repo, Pro account) |
-
----
-
-## 讨论中的未来方向
-
-1. **or-opt + 多起点贪心** — 下一步算法改进
-2. **MapLibre GL 地图可视化** — 在页面内显示路线图，不跳转 Google Maps
-3. **Android Accessibility Service** — 自动抓取 Spoke app 订单，不需要截图
-4. **圆心南移策略** — 路线末尾优先南边站点，影响派单系统给更多南区单
-5. **Ruin-and-Recreate** — 参考 PyVRP/jsprit，新单加入时重新优化而不是简单插入
 
 ---
 
@@ -203,4 +280,14 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3
 
 ---
 
-生成时间: 2026-05-05
+## 讨论中的未来方向
+
+1. **MapLibre GL 地图可视化** — 在页面内显示路线图，不跳转 Google Maps
+2. **Android Accessibility Service** — 自动抓取 Spoke app 订单，不需要截图
+3. **圆心南移策略** — 路线末尾优先南边站点，影响派单系统给更多南区单
+4. **Ruin-and-Recreate** — 参考 PyVRP/jsprit，新单加入时重新优化而不是简单插入
+5. **时间窗 / LATE 单权重** — 目标函数加入截止时间约束
+
+---
+
+更新时间: 2026-05-06（V3 算法审计完成，待提交）
