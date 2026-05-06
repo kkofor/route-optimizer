@@ -372,9 +372,10 @@ async function doRun(){
         }
       });
 
-      // Step 4a: Greedy nearest-neighbor with real matrix + pickup constraint
+      // Step 4a: Multi-start greedy + VND local search (2-opt + or-opt).
       const n=active.length;
       const homeMatIdx=fixHome?allLocs.length-1:0;
+      const IMPROVE_EPS=0.1;
 
       function routeCost(order){
         let path=[0,...order.map(i=>i+1),...(fixHome?[homeMatIdx]:[])];
@@ -392,52 +393,130 @@ async function doRun(){
         return true;
       }
 
-      const visited=new Array(n).fill(false);
-      const orderIdx=[];
-      let curMatIdx=0;
-
-      for(let step=0;step<n;step++){
-        let best=-1,bestDur=Infinity;
-        for(let i=0;i<n;i++){
-          if(visited[i]) continue;
-          if(requiresPickup[i]!==undefined&&!visited[requiresPickup[i]]) continue;
-          const d=durMatrix[curMatIdx][i+1];
-          if(d<bestDur){bestDur=d;best=i;}
+      // Greedy NN starting from a chosen first station (firstIdx in [0..n-1]).
+      // firstIdx === -1 means: pick the first station by NN from origin (free choice).
+      function greedyFrom(firstIdx){
+        const visited=new Array(n).fill(false);
+        const order=[];
+        let curMatIdx=0;
+        if(firstIdx>=0){
+          // Forced first: only valid if it has no pending pickup dependency.
+          if(requiresPickup[firstIdx]!==undefined) return null;
+          visited[firstIdx]=true;
+          order.push(firstIdx);
+          curMatIdx=firstIdx+1;
         }
-        if(best<0) break;
-        visited[best]=true;
-        orderIdx.push(best);
-        curMatIdx=best+1;
+        for(let step=order.length;step<n;step++){
+          let best=-1,bestDur=Infinity;
+          for(let i=0;i<n;i++){
+            if(visited[i]) continue;
+            if(requiresPickup[i]!==undefined&&!visited[requiresPickup[i]]) continue;
+            const d=durMatrix[curMatIdx][i+1];
+            if(d<bestDur){bestDur=d;best=i;}
+          }
+          if(best<0) break;
+          visited[best]=true;
+          order.push(best);
+          curMatIdx=best+1;
+        }
+        return order.length===n?order:null;
       }
 
-      // Step 4b: 2-opt improvement - fix backtracking
-      // Try reversing all sub-segments, keep if total cost improves
-      let improved=true;
-      let iters=0;
-      while(improved&&iters<50){
-        improved=false;
-        iters++;
-        for(let i=0;i<orderIdx.length-1;i++){
-          for(let j=i+2;j<orderIdx.length;j++){
-            // Reverse segment [i+1..j]
-            const newOrder=[
-              ...orderIdx.slice(0,i+1),
-              ...orderIdx.slice(i+1,j+1).reverse(),
-              ...orderIdx.slice(j+1)
-            ];
-            if(!constraintOk(newOrder)) continue;
-            if(routeCost(newOrder)<routeCost(orderIdx)-0.1){
-              orderIdx.splice(0,orderIdx.length,...newOrder);
-              improved=true;
+      // 2-opt: reverse sub-segments while constraint-feasible & cost improves.
+      function twoOpt(order){
+        let improved=true,iters=0;
+        while(improved&&iters<50){
+          improved=false; iters++;
+          const baseCost=routeCost(order);
+          for(let i=0;i<order.length-1;i++){
+            for(let j=i+2;j<order.length;j++){
+              const newOrder=[
+                ...order.slice(0,i+1),
+                ...order.slice(i+1,j+1).reverse(),
+                ...order.slice(j+1)
+              ];
+              if(!constraintOk(newOrder)) continue;
+              if(routeCost(newOrder)<baseCost-IMPROVE_EPS){
+                order.splice(0,order.length,...newOrder);
+                improved=true;
+                break;
+              }
+            }
+            if(improved) break;
+          }
+        }
+        return order;
+      }
+
+      // or-opt: relocate a chain of length 1/2/3 to every other position.
+      function orOpt(order){
+        let improved=true,iters=0;
+        while(improved&&iters<50){
+          improved=false; iters++;
+          const baseCost=routeCost(order);
+          outer:
+          for(let len=1;len<=3;len++){
+            for(let i=0;i+len<=order.length;i++){
+              const chain=order.slice(i,i+len);
+              const rest=[...order.slice(0,i),...order.slice(i+len)];
+              for(let j=0;j<=rest.length;j++){
+                if(j===i) continue; // same place
+                const cand=[...rest.slice(0,j),...chain,...rest.slice(j)];
+                if(!constraintOk(cand)) continue;
+                if(routeCost(cand)<baseCost-IMPROVE_EPS){
+                  order.splice(0,order.length,...cand);
+                  improved=true;
+                  break outer;
+                }
+              }
             }
           }
         }
+        return order;
       }
+
+      // VND: alternate 2-opt and or-opt until neither improves in one round.
+      function vnd(order){
+        let rounds=0;
+        while(rounds<10){
+          rounds++;
+          const c0=routeCost(order);
+          twoOpt(order);
+          orOpt(order);
+          const c1=routeCost(order);
+          if(c1>=c0-IMPROVE_EPS) break;
+        }
+        return order;
+      }
+
+      // Build seed list: -1 (free origin) + K nearest no-pickup stations.
+      const eligibleFirst=[];
+      for(let i=0;i<n;i++){
+        if(requiresPickup[i]===undefined) eligibleFirst.push(i);
+      }
+      eligibleFirst.sort((a,b)=>durMatrix[0][a+1]-durMatrix[0][b+1]);
+      const K=Math.min(eligibleFirst.length,Math.max(3,Math.min(n,6)));
+      const seeds=[-1,...eligibleFirst.slice(0,K)];
+
+      // Run VND on every seed, keep the best.
+      let orderIdx=null;
+      let bestCost=Infinity;
+      for(const s of seeds){
+        const o=greedyFrom(s);
+        if(!o) continue;
+        vnd(o);
+        const c=routeCost(o);
+        if(c<bestCost){bestCost=c;orderIdx=o;}
+      }
+      // Fallback (should be unreachable): if nothing produced a full route,
+      // fall back to a single NN from origin to keep the pipeline alive.
+      if(!orderIdx) orderIdx=greedyFrom(-1)||[];
+
 
       orderedItems=orderIdx.map(i=>active[i]);
       const finalCost=Math.round(routeCost(orderIdx)/60);
       document.getElementById('sim-info').innerHTML=
-        `真实路网矩阵 + 2-opt优化 · 预计 <span>${finalCost}</span> 分钟`;
+        `多起点贪心 + 2-opt + or-opt · 预计 <span>${finalCost}</span> 分钟`;
 
     } else {
       orderedItems=active;
@@ -486,7 +565,7 @@ async function doRun(){
     const addrList=fullItems.map(p=>p.addr);
     const mapsEl=document.getElementById('maps-out');
     mapsEl.innerHTML='';
-    const CHUNK=9;
+    const CHUNK=7; // Google Maps app 卡阈值: 总地址点 >8 会卡, 1 起点 + 7 后续 = 8
     const totalSegs=Math.ceil((addrList.length-1)/CHUNK);
     for(let i=0;i<addrList.length-1;i+=CHUNK){
       const seg=addrList.slice(i,Math.min(i+CHUNK+1,addrList.length));
