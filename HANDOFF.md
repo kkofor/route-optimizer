@@ -144,15 +144,25 @@ HOME|家庭地址（可选）
 
 ## index.html 代码现状（2026-05-06）
 
-- **当前 sha**: `55be4b8c6ebdfa1f37c1cb935645cac61974aebd`（V3 + maps chunk fix）
-- **提交 commit**: [`d3fa87e9`](https://github.com/kkofor/route-optimizer/commit/d3fa87e9bc6acdfceb5b805720b36e4e6f5b8ee6) — 2026-05-06 16:01 UTC
+- **当前 sha**: `2feccb71242415c4c4410ae337d14db123c4ecc2`（V3 + 相邻地址去重）
+- **最新 commits**:
+  - [`5ed8cded`](https://github.com/kkofor/route-optimizer/commit/5ed8cdedf6948d9d955b6e355585b2473e45566b) — 相邻地址去重 + CHUNK 恢复 9（实战验证通过）
+  - [`d3fa87e9`](https://github.com/kkofor/route-optimizer/commit/d3fa87e9bc6acdfceb5b805720b36e4e6f5b8ee6) — V3 算法 + 初版 chunk fix
 - **原版 sha（参考）**: `6bfa3434de71a5ae7523a1213e42f65d210fc2ab`
-- **字符数**: 22807 → 25768（+2961 chars）
+- **字符数**: 22807 → 26209（+3402 chars）
 - **改动**:
-  - 算法 V3（多起点贪心 + or-opt VND）— L375–514
-  - Google Maps 分段 `CHUNK 9 → 7`（每段总地址 ≤ 8，避免 app 卡死）
+  - 算法 V3（多起点贪心 + or-opt VND）
+  - Google Maps URL 生成：相邻同地址自动合并为 1 个 stop（修同栋楼多单 "无法计算路线" bug）
+  - `CHUNK = 9`（贴 Google Maps iOS 官方上限：1 起点 + 9 后续 = 10 总点）
   - UI 文案：`真实路网矩阵 + 2-opt优化` → `多起点贪心 + 2-opt + or-opt`
 - **离线测试**：n=12×200 次 0/200 回归；n=8 vs 穷举最优 3/3 命中；n=25 stress ≤175ms
+
+### Google Maps 链接生成规则（重要）
+
+- **官方上限**：iOS 端总点数最多 10（含起点和终点）
+- **常见误判**：当年看到"超 8 卡"实为同栋楼连续重复地址触发 "无法计算路线"，与点数无关
+- **去重**：相邻同地址（trim + 折叠空白 + lowercase 比较）合并为 1 个 stop
+- **路线列表（route-out）和 stop 计数器（s-stops）保留全部原始单**——不会漏单
 
 ---
 
@@ -268,4 +278,4 @@ HOME|家庭地址（可选）
 
 ---
 
-更新时间: 2026-05-06（V3 已部署 + Maps chunk 修复，commit d3fa87e9）
+更新时间: 2026-05-06（V3 + 相邻地址去重已部署，commit 5ed8cded）
