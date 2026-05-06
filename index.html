@@ -15,7 +15,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
 h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
 .card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
-.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}
 textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
 textarea:focus{border-color:var(--green);}
 .hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -76,13 +76,23 @@ input:checked+.knob:before{transform:translateX(18px);background:#fff;}
     <div class="card-title" style="margin-bottom:0">① 粘贴 Claude 输出</div>
     <button type="button" class="btn-paste" onclick="doPaste(this)">📋 一键粘贴</button>
   </div>
-  <textarea id="paste-in" placeholder="PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
+  <textarea id="paste-in" oninput="onPasteInput()" placeholder="PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
 DELIVER|2394568|101 Amber Trail, Winnipeg, MB R2P
 DELIVER_ONLY|2393945|14 Wentwood Crescent, Winnipeg, MB R2P 2A8
 HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
   <div class="hint">格式：<code>PICKUP|Job号|地址</code> / <code>DELIVER|Job号|地址</code> / <code>DELIVER_ONLY|任意|地址</code> / <code>HOME|地址</code></div>
   <button class="btn-parse" onclick="doParse()">解析 →</button>
   <div id="parsed-out" style="margin-top:10px;display:none"></div>
+</div>
+<div class="card" id="today-card" style="display:none">
+  <div class="today-bar">
+    <div class="card-title" id="today-title" style="margin-bottom:0">今日订单</div>
+    <div class="today-actions">
+      <button type="button" class="btn-mini" onclick="clearToday()">清空今日</button>
+      <button type="button" class="btn-mini" onclick="exportToday()">导出</button>
+    </div>
+  </div>
+  <div id="today-list"></div>
 </div>
 <div class="card">
   <div class="card-title">② 设置</div>
@@ -213,6 +223,202 @@ function doPaste(btn){
     console.error('clipboard read failed:',err);
   });
 }
+
+// ─── 今日订单数据库 ─────────────────────────────────────────────
+const DB_KEY='route_optimizer_db';
+const DB_RETAIN_DAYS=30;
+
+function todayKey(){
+  // Local date in YYYY-MM-DD (uses browser local TZ — Winnipeg).
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+
+function loadDB(){
+  try{
+    const raw=localStorage.getItem(DB_KEY);
+    if(!raw) return {};
+    return JSON.parse(raw)||{};
+  }catch(e){
+    console.error('DB load failed:',e);
+    return {};
+  }
+}
+
+function saveDB(db){
+  try{
+    localStorage.setItem(DB_KEY,JSON.stringify(db));
+  }catch(e){
+    console.error('DB save failed:',e);
+  }
+}
+
+function pruneDB(db){
+  // Drop buckets older than DB_RETAIN_DAYS.
+  const cutoff=new Date();
+  cutoff.setDate(cutoff.getDate()-DB_RETAIN_DAYS);
+  const cutoffKey=cutoff.toISOString().slice(0,10);
+  let pruned=0;
+  for(const k of Object.keys(db)){
+    if(k<cutoffKey){delete db[k];pruned++;}
+  }
+  return pruned;
+}
+
+// Sync current `parsed` array into today's bucket.
+// Rules:
+//   - new job: add as pending (DELIVER_ONLY -> pickup_status:done)
+//   - existing job: only fill blank fields; never overwrite status
+//   - existing job not in current paste: mark pickup_status+deliver_status = done
+//   - if current paste has zero PICKUP/DELIVER lines -> NO-OP (guard)
+function syncToDB(){
+  // Collect job-level info from `parsed` (which the parser already builds).
+  const incoming={};
+  for(const p of parsed){
+    if(!['PICKUP','DELIVER','DELIVER_ONLY'].includes(p.type)) continue;
+    if(!p.job) continue;
+    if(!incoming[p.job]) incoming[p.job]={pickup:null,deliver:null,deliverOnly:false};
+    if(p.type==='PICKUP') incoming[p.job].pickup=p.addr;
+    else if(p.type==='DELIVER') incoming[p.job].deliver=p.addr;
+    else if(p.type==='DELIVER_ONLY'){incoming[p.job].deliver=p.addr;incoming[p.job].deliverOnly=true;}
+  }
+  const incomingJobs=Object.keys(incoming);
+  if(incomingJobs.length===0){
+    // 防护:空粘贴不动数据库
+    renderToday();
+    return;
+  }
+
+  const db=loadDB();
+  pruneDB(db);
+  const k=todayKey();
+  if(!db[k]) db[k]={};
+  const bucket=db[k];
+
+  // Add or refresh existing
+  for(const job of incomingJobs){
+    const inc=incoming[job];
+    if(!bucket[job]){
+      bucket[job]={
+        pickup_addr: inc.pickup||'',
+        deliver_addr: inc.deliver||'',
+        pickup_status: inc.deliverOnly?'done':'pending',
+        deliver_status: 'pending',
+        first_seen: new Date().toISOString(),
+      };
+    } else {
+      // Fill blank fields only
+      if(!bucket[job].pickup_addr && inc.pickup) bucket[job].pickup_addr=inc.pickup;
+      if(!bucket[job].deliver_addr && inc.deliver) bucket[job].deliver_addr=inc.deliver;
+      // If discovered as DELIVER_ONLY this round, ensure pickup_status=done
+      if(inc.deliverOnly && bucket[job].pickup_status==='pending') bucket[job].pickup_status='done';
+    }
+  }
+
+  // Diff: jobs in bucket but not in incoming -> mark fully done
+  const incomingSet=new Set(incomingJobs);
+  for(const job of Object.keys(bucket)){
+    if(!incomingSet.has(job)){
+      bucket[job].pickup_status='done';
+      bucket[job].deliver_status='done';
+    }
+  }
+
+  saveDB(db);
+  renderToday();
+}
+
+function renderToday(){
+  const card=document.getElementById('today-card');
+  const list=document.getElementById('today-list');
+  const title=document.getElementById('today-title');
+  const db=loadDB();
+  const bucket=db[todayKey()]||{};
+  const jobs=Object.entries(bucket);
+  if(jobs.length===0){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='block';
+  // Sort: in-progress first, completed after; within each by first_seen
+  const isDone=j=>j[1].pickup_status==='done' && j[1].deliver_status==='done';
+  jobs.sort((a,b)=>{
+    const da=isDone(a)?1:0, db_=isDone(b)?1:0;
+    if(da!==db_) return da-db_;
+    return (a[1].first_seen||'').localeCompare(b[1].first_seen||'');
+  });
+  const doneCount=jobs.filter(isDone).length;
+  title.textContent=`今日订单 (${doneCount}/${jobs.length} 完成)`;
+
+  list.innerHTML=jobs.map(([job,r])=>{
+    const done=isDone(r);
+    const status=done?'完成':'进行中';
+    const cls=done?'done':'pending';
+    const pickup=r.pickup_addr?`<b>取</b>: ${r.pickup_addr}`:'';
+    const deliver=r.deliver_addr?`<b>送</b>: ${r.deliver_addr}`:'';
+    const sep=pickup&&deliver?'<br>':'';
+    return `<div class="today-job ${done?'done':''}">
+      <div class="today-job-head">
+        <span class="today-job-id">#${job}</span>
+        <span class="today-job-status ${cls}">${status}</span>
+      </div>
+      <div class="today-job-addr">${pickup}${sep}${deliver}</div>
+    </div>`;
+  }).join('');
+}
+
+function clearToday(){
+  if(!confirm('确认清空今日所有订单记录?')) return;
+  const db=loadDB();
+  delete db[todayKey()];
+  saveDB(db);
+  renderToday();
+}
+
+function exportToday(){
+  const db=loadDB();
+  const bucket=db[todayKey()]||{};
+  const jobs=Object.entries(bucket);
+  if(jobs.length===0){alert('今日无订单');return;}
+  const lines=[`今日订单 ${todayKey()}`,''];
+  for(const [job,r] of jobs){
+    const status=r.pickup_status==='done'&&r.deliver_status==='done'?'✓ 完成':'○ 进行中';
+    lines.push(`#${job}  ${status}`);
+    if(r.pickup_addr) lines.push(`  取: ${r.pickup_addr}`);
+    if(r.deliver_addr) lines.push(`  送: ${r.deliver_addr}`);
+    lines.push('');
+  }
+  const txt=lines.join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>alert('已复制到剪贴板')).catch(()=>{
+      // Fallback: show in prompt
+      window.prompt('复制以下内容:',txt);
+    });
+  } else {
+    window.prompt('复制以下内容:',txt);
+  }
+}
+
+// Debounced auto-sync on textarea input.
+let _pasteSyncTimer=null;
+function onPasteInput(){
+  clearTimeout(_pasteSyncTimer);
+  _pasteSyncTimer=setTimeout(()=>{
+    doParse();      // populates `parsed`
+    syncToDB();     // syncs into DB + rerender
+  },800);
+}
+
+// Initial render on page load.
+window.addEventListener('DOMContentLoaded',()=>{
+  // Prune old + render today's saved bucket
+  const db=loadDB();
+  if(pruneDB(db)>0) saveDB(db);
+  renderToday();
+});
 
 function doParse(){
   const raw=document.getElementById('paste-in').value.trim();
