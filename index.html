@@ -237,22 +237,51 @@ function todayKey(){
   return `${y}-${m}-${dd}`;
 }
 
+// Storage with localStorage primary + memory fallback (Safari Private/blocked cookies)
+let _memDB=null;          // in-memory mirror, used when localStorage unavailable
+let _storageMode=null;    // 'local' | 'memory' | null (untested)
+let _storageWarned=false;
+
+function _detectStorage(){
+  if(_storageMode!==null) return _storageMode;
+  try{
+    const k='__rotest__';
+    localStorage.setItem(k,'1');
+    localStorage.removeItem(k);
+    _storageMode='local';
+  }catch(e){
+    _storageMode='memory';
+    if(!_storageWarned){
+      _storageWarned=true;
+      console.warn('localStorage unavailable, using memory only:',e.message||e);
+    }
+  }
+  return _storageMode;
+}
+
 function loadDB(){
+  const mode=_detectStorage();
+  if(mode==='memory') return _memDB||{};
   try{
     const raw=localStorage.getItem(DB_KEY);
     if(!raw) return {};
     return JSON.parse(raw)||{};
   }catch(e){
-    console.error('DB load failed:',e);
-    return {};
+    console.error('DB load failed, falling back to memory:',e);
+    _storageMode='memory';
+    return _memDB||{};
   }
 }
 
 function saveDB(db){
+  const mode=_detectStorage();
+  _memDB=db; // always keep mem mirror so a later failover keeps data
+  if(mode==='memory') return;
   try{
     localStorage.setItem(DB_KEY,JSON.stringify(db));
   }catch(e){
-    console.error('DB save failed:',e);
+    console.error('DB save failed, falling back to memory:',e);
+    _storageMode='memory';
   }
 }
 
@@ -344,14 +373,15 @@ function renderToday(){
   }
   card.style.display='block';
   // Sort: in-progress first, completed after; within each by first_seen
-  const isDone=j=>j[1].pickup_status==='done' && j[1].deliver_status==='done';
+  const isDone=r=>r&&r.pickup_status==='done' && r.deliver_status==='done';
   jobs.sort((a,b)=>{
-    const da=isDone(a)?1:0, db_=isDone(b)?1:0;
+    const da=isDone(a[1])?1:0, db_=isDone(b[1])?1:0;
     if(da!==db_) return da-db_;
     return (a[1].first_seen||'').localeCompare(b[1].first_seen||'');
   });
-  const doneCount=jobs.filter(isDone).length;
-  title.textContent=`今日订单 (${doneCount}/${jobs.length} 完成)`;
+  const doneCount=jobs.filter(([,r])=>isDone(r)).length;
+  const warn=_storageMode==='memory'?'  ⚠ 浏览器拒绝持久化, 关闭页面后丢失':'';
+  title.textContent=`今日订单 (${doneCount}/${jobs.length} 完成)${warn}`;
 
   list.innerHTML=jobs.map(([job,r])=>{
     const done=isDone(r);
