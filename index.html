@@ -15,7 +15,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
 h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
 .card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
-.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.btn-mini:disabled{opacity:0.45;cursor:not-allowed;}.btn-mini:disabled:hover{border-color:var(--b);color:var(--muted);}.btn-eod{border-color:var(--orange);color:var(--orange);}.btn-eod:hover:not(:disabled){border-color:var(--orange);color:var(--orange);background:rgba(220,140,40,0.08);}.today-job.frozen .today-job-status{opacity:0.7;}.today-job.frozen::after{content:'已结算';position:absolute;top:6px;right:6px;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}.today-job{position:relative;}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}.today-toggle{margin-left:auto;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--b);background:var(--bg);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;padding:0;}.today-toggle.pending{border-color:var(--orange);color:var(--orange);}.today-toggle.done{border-color:var(--green);color:var(--green);background:rgba(120,160,120,0.08);}.today-toggle:active{transform:scale(0.92);}.today-job-head{align-items:center;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}.today-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.today-actions{display:flex;gap:6px;}.btn-mini{background:var(--s2);border:1px solid var(--b);color:var(--muted);font-family:inherit;font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;line-height:1;}.btn-mini:hover{border-color:var(--green);color:var(--text);}.btn-mini:disabled{opacity:0.45;cursor:not-allowed;}.btn-mini:disabled:hover{border-color:var(--b);color:var(--muted);}.btn-eod{border-color:var(--orange);color:var(--orange);}.btn-eod:hover:not(:disabled){border-color:var(--orange);color:var(--orange);background:rgba(220,140,40,0.08);}.today-job.frozen .today-job-status{opacity:0.7;}.today-job.frozen::after{content:'已结算';position:absolute;top:6px;right:6px;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}.today-job{position:relative;}.summary-modal{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px;}.summary-box{background:var(--bg);border:1px solid var(--b);border-radius:6px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;}.summary-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}.sum-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--b);font-size:12px;}.sum-row:last-child{border-bottom:none;}.sum-row .lbl{color:var(--muted);}.sum-row .val{color:var(--text);font-weight:600;font-family:'JetBrains Mono',monospace;}.sum-section{margin-top:16px;font-size:11px;}.sum-section h4{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin:0 0 8px 0;font-weight:normal;}.sum-route{padding:6px 8px;border:1px solid var(--b);border-radius:3px;margin-bottom:4px;font-size:11px;color:var(--muted);}.sum-route .t{color:var(--text);font-family:'JetBrains Mono',monospace;}.sum-note{font-size:10px;color:var(--muted);margin-top:10px;line-height:1.5;}.today-job{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--b);border-radius:4px;margin-bottom:6px;background:var(--bg);}.today-job.done{opacity:0.55;}.today-job-head{display:flex;align-items:center;gap:8px;font-size:11px;}.today-job-id{font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;}.today-job-status{font-size:9px;padding:2px 6px;border-radius:2px;text-transform:uppercase;letter-spacing:.05em;}.today-job-status.pending{background:var(--orange);color:var(--bg);}.today-job-status.done{background:var(--green);color:var(--bg);}.today-job-addr{font-size:10px;color:var(--muted);line-height:1.5;padding-left:2px;}.today-job-addr b{color:var(--text);font-weight:normal;}.today-toggle{margin-left:auto;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--b);background:var(--bg);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:inherit;padding:0;}.today-toggle.pending{border-color:var(--orange);color:var(--orange);}.today-toggle.done{border-color:var(--green);color:var(--green);background:rgba(120,160,120,0.08);}.today-toggle:active{transform:scale(0.92);}.today-job-head{align-items:center;}
 textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
 textarea:focus{border-color:var(--green);}
 .hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -84,11 +84,21 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
   <button class="btn-parse" onclick="doParse()">解析 →</button>
   <div id="parsed-out" style="margin-top:10px;display:none"></div>
 </div>
+<div id="summary-modal" class="summary-modal" style="display:none" onclick="closeSummary(event)">
+  <div class="summary-box">
+    <div class="summary-head">
+      <div class="card-title" style="margin-bottom:0">今日汇总</div>
+      <button type="button" class="btn-mini" onclick="closeSummary(true)">关闭</button>
+    </div>
+    <div id="summary-body"></div>
+  </div>
+</div>
 <div class="card" id="today-card" style="display:none">
   <div class="today-bar">
     <div class="card-title" id="today-title" style="margin-bottom:0">今日订单</div>
     <div class="today-actions">
       <button type="button" class="btn-mini btn-eod" id="btn-eod" onclick="endOfDay()">下班结算</button>
+      <button type="button" class="btn-mini" onclick="showSummary()">今日汇总</button>
       <button type="button" class="btn-mini" onclick="exportToday()">导出</button>
       <button type="button" class="btn-mini" onclick="clearToday()">清空今日</button>
     </div>
@@ -358,6 +368,7 @@ function syncToDB(){
   // 已结算 (frozen) 的单不动 — 它们已经定型, 后续粘贴不影响
   const incomingSet=new Set(incomingJobs);
   for(const job of Object.keys(bucket)){
+    if(job.startsWith('_')) continue;
     if(bucket[job].frozen) continue;
     if(!incomingSet.has(job)){
       bucket[job].pickup_status='done';
@@ -367,6 +378,86 @@ function syncToDB(){
 
   saveDB(db);
   renderToday();
+}
+
+// ─── 今日汇总 ─────────────────────────────────────────────────
+function recordRoute(km, minutes, orderedItems){
+  if(typeof km!=='number'||isNaN(km)||km<=0) return;
+  if(typeof minutes!=='number'||isNaN(minutes)||minutes<=0) return;
+  const db=loadDB();
+  const k=todayKey();
+  if(!db[k]) db[k]={};
+  if(!db[k]._routes) db[k]._routes=[];
+  const jobIds=[];
+  for(const p of (orderedItems||[])){
+    if(p.job && !jobIds.includes(p.job)) jobIds.push(p.job);
+  }
+  db[k]._routes.push({
+    at: new Date().toISOString(),
+    km: km,
+    min: minutes,
+    jobs: jobIds,
+    n: jobIds.length,
+  });
+  saveDB(db);
+}
+
+function showSummary(){
+  const db=loadDB();
+  const bucket=db[todayKey()]||{};
+  const jobs=Object.entries(bucket).filter(([k])=>!k.startsWith('_'));
+  if(jobs.length===0 && (!bucket._routes||bucket._routes.length===0)){
+    alert('今日无数据');
+    return;
+  }
+  const isDone=r=>r&&r.pickup_status==='done'&&r.deliver_status==='done';
+  const total=jobs.length;
+  const done=jobs.filter(([,r])=>isDone(r)).length;
+  const pending=total-done;
+  const carriedOut=jobs.filter(([,r])=>r.carried_to).length;
+  const carriedIn=jobs.filter(([,r])=>r.carried_from).length;
+  const routes=bucket._routes||[];
+  const totalKm=routes.reduce((s,r)=>s+r.km,0);
+  const totalMin=routes.reduce((s,r)=>s+r.min,0);
+  const hh=Math.floor(totalMin/60);
+  const mm=totalMin%60;
+
+  const fmtTime=(iso)=>{
+    const d=new Date(iso);
+    return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  };
+
+  let html=`
+    <div class="sum-row"><span class="lbl">日期</span><span class="val">${todayKey()}</span></div>
+    <div class="sum-row"><span class="lbl">订单总数</span><span class="val">${total}</span></div>
+    <div class="sum-row"><span class="lbl">已完成</span><span class="val">${done}</span></div>
+    <div class="sum-row"><span class="lbl">未完成</span><span class="val">${pending}</span></div>`;
+  if(carriedOut>0) html+=`<div class="sum-row"><span class="lbl">过继到次日</span><span class="val">${carriedOut}</span></div>`;
+  if(carriedIn>0) html+=`<div class="sum-row"><span class="lbl">从昨日过继来</span><span class="val">${carriedIn}</span></div>`;
+  html+=`
+    <div class="sum-row"><span class="lbl">算路线次数</span><span class="val">${routes.length}</span></div>
+    <div class="sum-row"><span class="lbl">累计距离</span><span class="val">${totalKm.toFixed(1)} km</span></div>
+    <div class="sum-row"><span class="lbl">累计驾驶时间</span><span class="val">${hh>0?hh+'h ':''}${mm}min</span></div>`;
+
+  if(routes.length>0){
+    html+=`<div class="sum-section"><h4>各次路线</h4>`;
+    for(const r of routes){
+      html+=`<div class="sum-route"><span class="t">${fmtTime(r.at)}</span> · ${r.n} 站 · ${r.km.toFixed(1)} km · ${r.min} min</div>`;
+    }
+    html+=`</div>`;
+  }
+  if(routes.length>1){
+    html+=`<div class="sum-note">⚠ 累计距离/时间是所有路线计算之和。同一段路如果在多次算路线中都出现, 会被重复计入, 因此实际行驶里程 ≤ 此值。</div>`;
+  }
+
+  document.getElementById('summary-body').innerHTML=html;
+  document.getElementById('summary-modal').style.display='flex';
+}
+
+function closeSummary(e){
+  if(e===true || (e&&e.target===e.currentTarget)){
+    document.getElementById('summary-modal').style.display='none';
+  }
 }
 
 // ─── 下班结算 (End-of-Day) ─────────────────────────────────────
@@ -401,7 +492,7 @@ function endOfDay(){
   const db=loadDB();
   const tk=todayKey();
   const bucket=db[tk]||{};
-  const jobs=Object.entries(bucket);
+  const jobs=Object.entries(bucket).filter(([k])=>!k.startsWith('_'));
   if(jobs.length===0){
     alert('今日无订单');
     return;
@@ -481,7 +572,7 @@ function renderToday(){
   const title=document.getElementById('today-title');
   const db=loadDB();
   const bucket=db[todayKey()]||{};
-  const jobs=Object.entries(bucket);
+  const jobs=Object.entries(bucket).filter(([k])=>!k.startsWith('_'));
   if(jobs.length===0){
     card.style.display='none';
     return;
@@ -538,7 +629,7 @@ function clearToday(){
 function exportToday(){
   const db=loadDB();
   const bucket=db[todayKey()]||{};
-  const jobs=Object.entries(bucket);
+  const jobs=Object.entries(bucket).filter(([k])=>!k.startsWith('_'));
   if(jobs.length===0){alert('今日无订单');return;}
   const lines=[`今日订单 ${todayKey()}`,''];
   for(const [job,r] of jobs){
@@ -919,7 +1010,7 @@ async function doRun(){
         body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})
       });
       if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;
-        if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
+        if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);try{recordRoute(parseFloat(dist),time,orderedItems);}catch(e){console.error('recordRoute failed',e);}}}
     }catch(e){}
 
     document.getElementById('s-dist').textContent=dist;
