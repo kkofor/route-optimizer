@@ -561,18 +561,24 @@ async function doRun(){
       </div>`;
     }).join('');
 
-    // Maps links
-    const addrList=fullItems.map(p=>p.addr);
+    // Maps links — 相邻去重 (同一地址多单合并为一个 stop)
+    // Google Maps 收到连续相同坐标会拒绝算路线 ("无法计算路线")。
+    // 业务场景: 同一栋楼 N 单的取/送, 算法连排在一起, Maps 只需一个停靠点。
+    const norm=s=>(s||'').trim().replace(/\s+/g,' ').toLowerCase();
+    const rawList=fullItems.map(p=>p.addr);
+    const addrList=rawList.filter((a,i)=>i===0||norm(a)!==norm(rawList[i-1]));
     const mapsEl=document.getElementById('maps-out');
     mapsEl.innerHTML='';
-    const CHUNK=7; // Google Maps app 卡阈值: 总地址点 >8 会卡, 1 起点 + 7 后续 = 8
-    const totalSegs=Math.ceil((addrList.length-1)/CHUNK);
+    const CHUNK=9; // Google Maps 官方上限: 总点数 10 (1 起点 + 9 后续)
+    const totalSegs=Math.ceil(Math.max(addrList.length-1,1)/CHUNK);
     for(let i=0;i<addrList.length-1;i+=CHUNK){
       const seg=addrList.slice(i,Math.min(i+CHUNK+1,addrList.length));
+      if(seg.length<2) continue; // 单点段没意义, 跳过
       const url='https://www.google.com/maps/dir/'+seg.map(a=>encodeURIComponent(a)).join('/');
       const sn=Math.floor(i/CHUNK)+1;
       const div=document.createElement('div');div.className='maps-seg';
-      div.innerHTML=`<div class="maps-lbl">${totalSegs>1?'段 '+sn+'/'+totalSegs:'完整路线'} · ${seg.length} 站</div>
+      const dedupNote=addrList.length<rawList.length?` (合并 ${rawList.length-addrList.length} 个相同地址)`:'';
+      div.innerHTML=`<div class="maps-lbl">${totalSegs>1?'段 '+sn+'/'+totalSegs:'完整路线'} · ${seg.length} 站${i===0?dedupNote:''}</div>
         <a href="${url}" target="_blank" class="maps-a">&#9654; 打开 Google Maps</a>`;
       mapsEl.appendChild(div);
     }
