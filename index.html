@@ -15,7 +15,7 @@
 body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;padding:14px;max-width:640px;margin:0 auto;}
 h1{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b);}
 .card{background:var(--s1);border:1px solid var(--b);border-radius:6px;padding:12px;margin-bottom:10px;}
-.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}
+.card-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em;margin-bottom:10px;}.paste-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}.btn-paste{background:var(--s2);border:1px solid var(--b);color:var(--text);font-family:inherit;font-size:11px;padding:5px 10px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1;}.btn-paste:hover{border-color:var(--green);}.btn-paste:active{transform:translateY(1px);}.btn-paste.ok{border-color:var(--green);color:var(--green);}.btn-paste.err{border-color:#c54;color:#c54;}
 textarea{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:4px;padding:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;outline:none;resize:vertical;min-height:180px;}
 textarea:focus{border-color:var(--green);}
 .hint{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -72,7 +72,10 @@ input:checked+.knob:before{transform:translateX(18px);background:#fff;}
 <body>
 <h1>&#9658;&#9658; Route Optimizer v3.2</h1>
 <div class="card">
-  <div class="card-title">① 粘贴 Claude 输出</div>
+  <div class="paste-bar">
+    <div class="card-title" style="margin-bottom:0">① 粘贴 Claude 输出</div>
+    <button type="button" class="btn-paste" onclick="doPaste(this)">📋 一键粘贴</button>
+  </div>
   <textarea id="paste-in" placeholder="PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
 DELIVER|2394568|101 Amber Trail, Winnipeg, MB R2P
 DELIVER_ONLY|2393945|14 Wentwood Crescent, Winnipeg, MB R2P 2A8
@@ -190,6 +193,25 @@ function shuffle(arr){
   const a=[...arr];
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
   return a;
+}
+
+function doPaste(btn){
+  const ta=document.getElementById('paste-in');
+  const orig=btn.textContent;
+  const flash=(cls,txt)=>{btn.classList.add(cls);btn.textContent=txt;setTimeout(()=>{btn.classList.remove(cls);btn.textContent=orig;},1400);};
+  if(!navigator.clipboard||!navigator.clipboard.readText){
+    flash('err','✗ 浏览器不支持，长按粘贴');
+    return;
+  }
+  navigator.clipboard.readText().then(text=>{
+    if(!text){flash('err','剪贴板为空');return;}
+    ta.value=text; // 覆盖
+    ta.dispatchEvent(new Event('input',{bubbles:true}));
+    flash('ok','✓ 已粘贴');
+  }).catch(err=>{
+    flash('err','✗ 拒绝授权');
+    console.error('clipboard read failed:',err);
+  });
 }
 
 function doParse(){
