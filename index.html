@@ -456,7 +456,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ─── 今日汇总 ─────────────────────────────────────────────────
-function recordRoute(km, minutes, orderedItems){
+function recordRoute(km, minutes, orderedItems, originAddr, originLng, originLat){
   if(typeof km!=='number'||isNaN(km)||km<=0) return;
   if(typeof minutes!=='number'||isNaN(minutes)||minutes<=0) return;
   const db=loadDB();
@@ -473,8 +473,64 @@ function recordRoute(km, minutes, orderedItems){
     min: minutes,
     jobs: jobIds,
     n: jobIds.length,
+    origin: originAddr||null,
+    olat: typeof originLat==='number'?originLat:null,
+    olng: typeof originLng==='number'?originLng:null,
   });
   saveDB(db);
+}
+
+// Haversine 直线距离 (km), × 1.4 折算为城市驾驶距离.
+function haversineKm(lat1, lng1, lat2, lng2){
+  const R=6371;
+  const toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1);
+  const dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+// 累计算法 (用户设计):
+//   - 同 origin 重复 → 只保留最后一次
+//   - 不同 origin → 加起点位移段 + 这次完整路线
+//   - 缺坐标的旧数据 → 仅累加路线本身, accuracy='legacy'
+function computeAccumulated(routes){
+  if(!routes||routes.length===0) return {km:0, min:0, accuracy:'high'};
+  const sorted=[...routes].sort((a,b)=>(a.at||'').localeCompare(b.at||''));
+  let km=0, min=0, prev=null, hasLegacy=false, hasModern=false;
+  for(const r of sorted){
+    if(prev===null){
+      km+=r.km; min+=r.min;
+      prev=r;
+      if(typeof r.olat==='number') hasModern=true;
+      else hasLegacy=true;
+      continue;
+    }
+    const sameOrigin = prev.origin && r.origin && prev.origin===r.origin;
+    if(sameOrigin){
+      km = km - prev.km + r.km;
+      min = min - prev.min + r.min;
+      prev=r;
+      continue;
+    }
+    const haveCoords = typeof prev.olat==='number' && typeof prev.olng==='number'
+                    && typeof r.olat==='number' && typeof r.olng==='number';
+    if(haveCoords){
+      const shiftKm = haversineKm(prev.olat,prev.olng,r.olat,r.olng) * 1.4;
+      const shiftMin = shiftKm/40*60;
+      km += shiftKm;
+      min += shiftMin;
+      hasModern=true;
+    } else {
+      hasLegacy=true;
+    }
+    km+=r.km; min+=r.min;
+    prev=r;
+  }
+  let accuracy='high';
+  if(hasLegacy && hasModern) accuracy='mixed';
+  else if(hasLegacy && !hasModern) accuracy='legacy';
+  return { km, min: Math.round(min), accuracy };
 }
 
 function showSummary(){
@@ -492,8 +548,9 @@ function showSummary(){
   const carriedOut=jobs.filter(([,r])=>r.carried_to).length;
   const carriedIn=jobs.filter(([,r])=>r.carried_from).length;
   const routes=bucket._routes||[];
-  const totalKm=routes.reduce((s,r)=>s+r.km,0);
-  const totalMin=routes.reduce((s,r)=>s+r.min,0);
+  const acc=computeAccumulated(routes);
+  const totalKm=acc.km;
+  const totalMin=acc.min;
   const hh=Math.floor(totalMin/60);
   const mm=totalMin%60;
 
@@ -511,8 +568,13 @@ function showSummary(){
   if(carriedIn>0) html+=`<div class="sum-row"><span class="lbl">从昨日过继来</span><span class="val">${carriedIn}</span></div>`;
   html+=`
     <div class="sum-row"><span class="lbl">算路线次数</span><span class="val">${routes.length}</span></div>
-    <div class="sum-row"><span class="lbl">累计距离</span><span class="val">${totalKm.toFixed(1)} km</span></div>
-    <div class="sum-row"><span class="lbl">累计驾驶时间</span><span class="val">${hh>0?hh+'h ':''}${mm}min</span></div>`;
+    <div class="sum-row"><span class="lbl">估计驾驶距离</span><span class="val">${totalKm.toFixed(1)} km</span></div>
+    <div class="sum-row"><span class="lbl">估计驾驶时间</span><span class="val">${hh>0?hh+'h ':''}${mm}min</span></div>`;
+  if(acc.accuracy==='legacy'){
+    html+=`<div class="sum-note" style="font-size:9px;color:var(--orange);margin-top:-4px">⚠ 早期路线缺少起点坐标, 上述数字为简单累加(可能高估). 之后的路线会精确计算.</div>`;
+  } else if(acc.accuracy==='mixed'){
+    html+=`<div class="sum-note" style="font-size:9px;color:var(--muted);margin-top:-4px">⚠ 部分早期路线缺少起点坐标, 仅按累加估算这部分.</div>`;
+  }
   // 预计油费
   const fc=computeFuelCost(totalKm);
   if(fc.valid){
@@ -529,8 +591,8 @@ function showSummary(){
     }
     html+=`</div>`;
   }
-  if(routes.length>1){
-    html+=`<div class="sum-note">⚠ 累计距离/时间是所有路线计算之和。同一段路如果在多次算路线中都出现, 会被重复计入, 因此实际行驶里程 ≤ 此值。</div>`;
+  if(routes.length>1 && acc.accuracy==='high'){
+    html+=`<div class="sum-note">距离/时间使用起点位移算法估算: 同 origin 视为重算去重, origin 变化时累加位移段. 误差通常 ±10%.</div>`;
   }
 
   document.getElementById('summary-body').innerHTML=html;
@@ -1195,7 +1257,7 @@ async function doRun(){
         body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})
       });
       if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;
-        if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);try{recordRoute(parseFloat(dist),time,orderedItems);}catch(e){console.error('recordRoute failed',e);}}}
+        if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);try{recordRoute(parseFloat(dist),time,orderedItems,originStr,originC[0],originC[1]);}catch(e){console.error('recordRoute failed',e);}}}
     }catch(e){}
 
     document.getElementById('s-dist').textContent=dist;
