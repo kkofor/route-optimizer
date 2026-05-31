@@ -51,6 +51,8 @@ body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-he
 .status-bar.loading{color:var(--green);background:#eaf4ee;border:1px solid #b8d8c4;}
 .status-bar.error{color:var(--red);background:#fdecea;border:1px solid #f2b8b8;}
 .status-bar.ok{color:var(--green);}
+.setup-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:8px;}
+.setup-note code{font-family:'JetBrains Mono',monospace;background:var(--s2);padding:1px 4px;border-radius:3px;color:var(--text);}
 
 /* ORDER LIST */
 .order-item{display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid var(--b);}
@@ -123,6 +125,14 @@ input[type=text]:focus{border-color:var(--green);}
 <!-- PAGE: SCAN -->
 <div id="page-scan" class="page active">
   <div class="card">
+    <div class="card-title">Open Source Setup</div>
+    <input type="text" id="cfg-ai-base" placeholder="AI Base URL, e.g. https://your-gateway.example.com" oninput="savePublicConfig()">
+    <input type="text" id="cfg-ai-token" placeholder="AI API token" oninput="savePublicConfig()">
+    <input type="text" id="cfg-ai-model" placeholder="AI model, e.g. claude-sonnet-4-5-20251001" oninput="savePublicConfig()">
+    <input type="text" id="cfg-ors-key" placeholder="OpenRouteService API key" oninput="savePublicConfig()" style="margin-bottom:0">
+    <div class="setup-note" id="setup-status">Fill in your own keys. Values are stored only in this browser via <code>localStorage</code>.</div>
+  </div>
+  <div class="card">
     <div class="card-title">上传截图 — AI 自动解析</div>
     <div class="upload-zone" id="upload-zone">
       <input type="file" accept="image/*" id="img-input" multiple onchange="onImageSelected(event)">
@@ -163,8 +173,8 @@ input[type=text]:focus{border-color:var(--green);}
       <label>终点固定为家</label>
       <label class="toggle"><input type="checkbox" id="fix-home" checked><span class="knob"></span></label>
     </div>
-    <input type="text" id="route-origin" placeholder="起点" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3">
-    <input type="text" id="route-home" placeholder="家的地址" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" style="margin-bottom:0">
+    <input type="text" id="route-origin" placeholder="起点" value="123 Example St, Winnipeg, MB" oninput="saveAddressDefaults()">
+    <input type="text" id="route-home" placeholder="家的地址" value="123 Example St, Winnipeg, MB" style="margin-bottom:0" oninput="saveAddressDefaults()">
   </div>
   <button class="btn btn-green" id="btn-route" onclick="doRoute()">&#9654; 优化路线</button>
   <div class="status-bar idle" id="route-status"></div>
@@ -216,10 +226,9 @@ input[type=text]:focus{border-color:var(--green);}
 
 <script>
 // ── Config ────────────────────────────────────────────────────────
-const AI_BASE = 'https://www.mrafx.ca';
-const AI_TOKEN = 'sk-sub2api-rIdn5H_lvQOWQOcCkPaWUb5BiYT5cLhF';
-const AI_MODEL = 'claude-sonnet-4-5-20251001';
-const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
+const PUBLIC_CONFIG_KEY = 'dispatch_pro_public_config_v1';
+const ADDRESS_CONFIG_KEY = 'dispatch_pro_address_defaults_v1';
+const DEFAULT_AI_MODEL = 'claude-sonnet-4-5-20251001';
 const SIM_RUNS = 15;
 const STORAGE_KEY = 'dispatch_db';
 
@@ -235,6 +244,82 @@ function loadDB(){
   catch(e){ return {}; }
 }
 function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+
+function loadPublicConfig(){
+  try{ return JSON.parse(localStorage.getItem(PUBLIC_CONFIG_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+
+function getPublicConfig(){
+  const cfg = loadPublicConfig();
+  return {
+    aiBase: (cfg.aiBase || '').trim().replace(/\/+$/,''),
+    aiToken: (cfg.aiToken || '').trim(),
+    aiModel: (cfg.aiModel || '').trim() || DEFAULT_AI_MODEL,
+    orsKey: (cfg.orsKey || '').trim()
+  };
+}
+
+function savePublicConfig(){
+  localStorage.setItem(PUBLIC_CONFIG_KEY, JSON.stringify({
+    aiBase: document.getElementById('cfg-ai-base').value.trim(),
+    aiToken: document.getElementById('cfg-ai-token').value.trim(),
+    aiModel: document.getElementById('cfg-ai-model').value.trim(),
+    orsKey: document.getElementById('cfg-ors-key').value.trim()
+  }));
+  renderSetupStatus();
+}
+
+function fillPublicConfig(){
+  const cfg = getPublicConfig();
+  document.getElementById('cfg-ai-base').value = cfg.aiBase;
+  document.getElementById('cfg-ai-token').value = cfg.aiToken;
+  document.getElementById('cfg-ai-model').value = cfg.aiModel;
+  document.getElementById('cfg-ors-key').value = cfg.orsKey;
+}
+
+function renderSetupStatus(){
+  const cfg = getPublicConfig();
+  const missing = [];
+  if(!cfg.aiBase) missing.push('AI base');
+  if(!cfg.aiToken) missing.push('AI token');
+  if(!cfg.orsKey) missing.push('ORS key');
+  const el = document.getElementById('setup-status');
+  el.textContent = missing.length
+    ? `Missing: ${missing.join(', ')}. Values are stored only in this browser via localStorage.`
+    : 'Ready: AI base, AI token, ORS key. Values are stored only in this browser via localStorage.';
+}
+
+function requirePublicConfig(parts){
+  const cfg = getPublicConfig();
+  const labels = {
+    aiBase: 'AI Base URL',
+    aiToken: 'AI API token',
+    aiModel: 'AI model',
+    orsKey: 'OpenRouteService key'
+  };
+  const missing = parts.filter(part => !cfg[part]);
+  if(missing.length) throw new Error(`请先在 Open Source Setup 填写 ${missing.map(k=>labels[k]).join('、')}`);
+  return cfg;
+}
+
+function loadAddressDefaults(){
+  try{ return JSON.parse(localStorage.getItem(ADDRESS_CONFIG_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+
+function applyAddressDefaults(){
+  const saved = loadAddressDefaults();
+  if(saved.routeOrigin) document.getElementById('route-origin').value = saved.routeOrigin;
+  if(saved.routeHome) document.getElementById('route-home').value = saved.routeHome;
+}
+
+function saveAddressDefaults(){
+  localStorage.setItem(ADDRESS_CONFIG_KEY, JSON.stringify({
+    routeOrigin: document.getElementById('route-origin').value.trim(),
+    routeHome: document.getElementById('route-home').value.trim()
+  }));
+}
 
 function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -301,6 +386,7 @@ zone.addEventListener('drop', e=>{
 // ── AI Scan ───────────────────────────────────────────────────────
 async function doScan(){
   if(!currentImages.length){ setStatus('scan','请先上传截图','error'); return; }
+  const cfg = requirePublicConfig(['aiBase','aiToken']);
   document.getElementById('btn-scan').disabled = true;
   setStatus('scan', 'AI 解析中…', 'loading');
   document.getElementById('scan-result').style.display = 'none';
@@ -331,15 +417,15 @@ async function doScan(){
     }));
     msgContent.push({ type: 'text', text: prompt });
 
-    const res = await fetch(`${AI_BASE}/v1/messages`, {
+    const res = await fetch(`${cfg.aiBase}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': AI_TOKEN,
+        'x-api-key': cfg.aiToken,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: cfg.aiModel,
         max_tokens: 1500,
         messages: [{ role: 'user', content: msgContent }]
       })
@@ -577,8 +663,9 @@ function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 function setStatus(page, msg, cls){ const e=document.getElementById(page+'-status'); if(e){e.textContent=msg; e.className='status-bar '+(cls||'idle');} }
 
 async function geocode(addr){
+  const cfg = requirePublicConfig(['orsKey']);
   const q = addr+(!/winnipeg/i.test(addr)?', Winnipeg, MB':'')+(!/canada/i.test(addr)?', Canada':'');
-  const r = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${ORS_KEY}&text=${encodeURIComponent(q)}&boundary.country=CA&size=1`);
+  const r = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${cfg.orsKey}&text=${encodeURIComponent(q)}&boundary.country=CA&size=1`);
   if(!r.ok) throw new Error('Geocode '+r.status);
   const d = await r.json();
   if(!d.features?.length) throw new Error('找不到: '+addr);
@@ -586,8 +673,9 @@ async function geocode(addr){
 }
 
 async function doRoute(){
+  const cfg = requirePublicConfig(['orsKey']);
   const rec = getTodayRecord();
-  const originStr = document.getElementById('route-origin').value.trim() || '16 Steeprock Cove, Winnipeg, MB R3Y 0L3';
+  const originStr = document.getElementById('route-origin').value.trim() || '123 Example St, Winnipeg, MB';
   const homeStr = document.getElementById('route-home').value.trim();
   const fixHome = document.getElementById('fix-home').checked;
   const doOpt = document.getElementById('do-opt').checked;
@@ -688,7 +776,7 @@ async function doRoute(){
         if(ordJ.length) body.jobs=ordJ.map(j=>({id:j.id,location:j.coord,amount:[0]}));
         await sleep(300);
         try{
-          const r=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
+          const r=await fetch('https://api.openrouteservice.org/optimization',{method:'POST',headers:{'Authorization':cfg.orsKey,'Content-Type':'application/json'},body:JSON.stringify(body)});
           if(!r.ok) continue;
           const data=await r.json();
           const orsDist=data.routes[0].summary?.distance||data.routes[0].cost||Infinity;
@@ -718,7 +806,7 @@ async function doRoute(){
     const routeCoords=[originC,...orderedItems.map(p=>p._coord),...(homeC?[homeC]:[])];
     let dist='—',time='—';
     try{
-      const dr=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{method:'POST',headers:{'Authorization':ORS_KEY,'Content-Type':'application/json'},body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})});
+      const dr=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{method:'POST',headers:{'Authorization':cfg.orsKey,'Content-Type':'application/json'},body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})});
       if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;if(s){dist=(s.distance/1000).toFixed(1);time=Math.round(s.duration/60);}}
     }catch(e){}
 
@@ -864,6 +952,9 @@ function renderStats(){
 }
 
 // Init
+fillPublicConfig();
+applyAddressDefaults();
+renderSetupStatus();
 renderStats();
 document.getElementById('orders-date').textContent = todayKey();
 </script>

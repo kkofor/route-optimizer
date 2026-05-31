@@ -67,19 +67,27 @@ input:checked+.knob:before{transform:translateX(18px);background:#fff;}
 .maps-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:3px;}
 .maps-a{display:block;background:var(--s2);border:1px solid var(--b);border-radius:4px;color:var(--text);padding:10px 12px;text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:11px;transition:border-color .2s;}
 .maps-a:hover{border-color:var(--green);color:var(--green);}
+.setup-note{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.6;}
+.setup-note code{font-family:'JetBrains Mono',monospace;background:var(--s2);padding:1px 4px;border-radius:3px;color:var(--text);}
 </style>
 </head>
 <body>
 <h1>&#9658;&#9658; Route Optimizer v3.2</h1>
 <div class="card">
+  <div class="card-title">Open Source Setup</div>
+  <input type="text" id="cfg-ors" placeholder="OpenRouteService API key" oninput="savePublicConfig()">
+  <input type="text" id="cfg-mapbox" placeholder="Mapbox public token" oninput="savePublicConfig()" style="margin-bottom:0">
+  <div class="setup-note" id="setup-status">Fill in your own keys. Values are stored only in this browser via <code>localStorage</code>.</div>
+</div>
+<div class="card">
   <div class="paste-bar">
     <div class="card-title" style="margin-bottom:0">① 粘贴 Claude 输出</div>
     <button type="button" class="btn-paste" onclick="doPaste(this)">📋 一键粘贴</button>
   </div>
-  <textarea id="paste-in" oninput="onPasteInput()" placeholder="PICKUP|2394568|1625 Kenaston Blvd, Winnipeg, MB R3P 2M4
-DELIVER|2394568|101 Amber Trail, Winnipeg, MB R2P
-DELIVER_ONLY|2393945|14 Wentwood Crescent, Winnipeg, MB R2P 2A8
-HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
+  <textarea id="paste-in" oninput="onPasteInput()" placeholder="PICKUP|2394568|123 Pickup Ave, Winnipeg, MB
+DELIVER|2394568|500 Delivery Rd, Winnipeg, MB
+DELIVER_ONLY|2393945|42 Example Crescent, Winnipeg, MB
+HOME|123 Example St, Winnipeg, MB"></textarea>
   <div class="hint">格式：<code>PICKUP|Job号|地址</code> / <code>DELIVER|Job号|地址</code> / <code>DELIVER_ONLY|任意|地址</code> / <code>HOME|地址</code></div>
   <button class="btn-parse" onclick="doParse()">解析 →</button>
   <div id="parsed-out" style="margin-top:10px;display:none"></div>
@@ -124,8 +132,8 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
     <input type="number" id="fuel-price" step="0.01" min="0" placeholder="1.45" oninput="saveFuelSettings()">
   </div>
   <div id="fuel-stale" class="fuel-stale" style="display:none"></div>
-  <input type="text" id="origin" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="起点（当前位置）">
-  <input type="text" id="home" value="16 Steeprock Cove, Winnipeg, MB R3Y 0L3" placeholder="家的地址" style="margin-bottom:0">
+  <input type="text" id="origin" value="123 Example St, Winnipeg, MB" placeholder="起点（当前位置）" oninput="saveAddressDefaults()">
+  <input type="text" id="home" value="123 Example St, Winnipeg, MB" placeholder="家的地址" style="margin-bottom:0" oninput="saveAddressDefaults()">
 </div>
 <button class="btn-run" id="btn-run" onclick="doRun()">&#9654; 优化并生成导航</button>
 <div class="status" id="status"></div>
@@ -143,10 +151,70 @@ HOME|16 Steeprock Cove, Winnipeg, MB R3Y 0L3"></textarea>
   <div class="card"><div class="card-title">Google Maps 导航</div><div id="maps-out"></div></div>
 </div>
 <script>
-const ORS='eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjNzQxYjYwZmZhZTQ0NDliMGQ1NzFjM2MyN2NmMGQ4IiwiaCI6Im11cm11cjY0In0=';
-const MAPBOX='pk.eyJ1Ijoia2tvZm9yIiwiYSI6ImNtb3QweXJ5dzAxZzAycHB3MmJ4aWpuYzgifQ.qd7Xmb8bp707fmWycggMWA';
+const PUBLIC_CONFIG_KEY='route_optimizer_public_config_v1';
+const ADDRESS_CONFIG_KEY='route_optimizer_address_defaults_v1';
 const SIM_RUNS=15; // number of simulation runs
 let parsed=[];
+
+function loadPublicConfig(){
+  try{return JSON.parse(localStorage.getItem(PUBLIC_CONFIG_KEY)||'{}');}
+  catch(e){return {};}
+}
+
+function getPublicConfig(){
+  const cfg=loadPublicConfig();
+  return {ors:(cfg.ors||'').trim(),mapbox:(cfg.mapbox||'').trim()};
+}
+
+function savePublicConfig(){
+  localStorage.setItem(PUBLIC_CONFIG_KEY, JSON.stringify({
+    ors: document.getElementById('cfg-ors').value.trim(),
+    mapbox: document.getElementById('cfg-mapbox').value.trim()
+  }));
+  renderSetupStatus();
+}
+
+function fillPublicConfig(){
+  const cfg=getPublicConfig();
+  document.getElementById('cfg-ors').value=cfg.ors;
+  document.getElementById('cfg-mapbox').value=cfg.mapbox;
+}
+
+function renderSetupStatus(){
+  const cfg=getPublicConfig();
+  const missing=[];
+  if(!cfg.ors) missing.push('ORS key');
+  if(!cfg.mapbox) missing.push('Mapbox token');
+  document.getElementById('setup-status').textContent = missing.length
+    ? `Missing: ${missing.join(', ')}. Values are stored only in this browser via localStorage.`
+    : 'Ready: ORS key, Mapbox token. Values are stored only in this browser via localStorage.';
+}
+
+function requirePublicConfig(parts){
+  const cfg=getPublicConfig();
+  const labels={ors:'OpenRouteService key',mapbox:'Mapbox token'};
+  const missing=parts.filter(part=>!cfg[part]);
+  if(missing.length) throw new Error(`请先在 Open Source Setup 填写 ${missing.map(k=>labels[k]).join('、')}`);
+  return cfg;
+}
+
+function loadAddressDefaults(){
+  try{return JSON.parse(localStorage.getItem(ADDRESS_CONFIG_KEY)||'{}');}
+  catch(e){return {};}
+}
+
+function applyAddressDefaults(){
+  const saved=loadAddressDefaults();
+  if(saved.origin) document.getElementById('origin').value=saved.origin;
+  if(saved.home) document.getElementById('home').value=saved.home;
+}
+
+function saveAddressDefaults(){
+  localStorage.setItem(ADDRESS_CONFIG_KEY, JSON.stringify({
+    origin: document.getElementById('origin').value.trim(),
+    home: document.getElementById('home').value.trim()
+  }));
+}
 
 
 // ── Geo helpers ───────────────────────────────────────────────────
@@ -905,6 +973,9 @@ function onPasteInput(){
 
 // Initial render on page load.
 window.addEventListener('DOMContentLoaded',()=>{
+  fillPublicConfig();
+  applyAddressDefaults();
+  renderSetupStatus();
   // Prune old + render today's saved bucket
   const db=loadDB();
   if(pruneDB(db)>0) saveDB(db);
@@ -966,8 +1037,9 @@ function renderParsed(){
 
 async function geocode(addr){
   // Mapbox geocoding - much better accuracy for Winnipeg addresses
+  const cfg = requirePublicConfig(['mapbox']);
   const q = encodeURIComponent(addr);
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=${MAPBOX}&country=CA&limit=1&proximity=-97.1384,49.8951`;
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=${cfg.mapbox}&country=CA&limit=1&proximity=-97.1384,49.8951`;
   const r = await fetch(url);
   if(!r.ok) throw new Error('Geocode '+r.status);
   const d = await r.json();
@@ -1033,9 +1105,10 @@ function buildOrsBody(originC, homeC, shipments, jobs, shuffled){
 }
 
 async function callORS(body){
+  const cfg = requirePublicConfig(['ors']);
   const r=await fetch('https://api.openrouteservice.org/optimization',{
     method:'POST',
-    headers:{'Authorization':ORS,'Content-Type':'application/json'},
+    headers:{'Authorization':cfg.ors,'Content-Type':'application/json'},
     body:JSON.stringify(body)
   });
   if(!r.ok){const t=await r.text();throw new Error('ORS: '+t.slice(0,150));}
@@ -1043,6 +1116,7 @@ async function callORS(body){
 }
 
 async function doRun(){
+  const cfg = requirePublicConfig(['ors','mapbox']);
   if(!parsed.length)doParse();
   const active=parsed.filter(p=>p.include&&p.type!=='HOME');
   if(!active.length){setStatus('没有有效站点','error');return;}
@@ -1078,7 +1152,7 @@ async function doRun(){
       setStatus('获取真实路网时间矩阵…','loading');
       const matRes=await fetch('https://api.openrouteservice.org/v2/matrix/driving-car',{
         method:'POST',
-        headers:{'Authorization':ORS,'Content-Type':'application/json'},
+        headers:{'Authorization':cfg.ors,'Content-Type':'application/json'},
         body:JSON.stringify({locations:allLocs,metrics:['duration']})
       });
       if(!matRes.ok){const t=await matRes.text();throw new Error('Matrix: '+t.slice(0,100));}
@@ -1253,7 +1327,7 @@ async function doRun(){
     try{
       const dr=await fetch('https://api.openrouteservice.org/v2/directions/driving-car',{
         method:'POST',
-        headers:{'Authorization':ORS,'Content-Type':'application/json'},
+        headers:{'Authorization':cfg.ors,'Content-Type':'application/json'},
         body:JSON.stringify({coordinates:routeCoords,preference:'shortest'})
       });
       if(dr.ok){const dd=await dr.json();const s=dd.routes?.[0]?.summary;
